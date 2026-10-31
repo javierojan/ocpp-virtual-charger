@@ -30,17 +30,27 @@
    *   heartbeatSec (60)          until the CSMS sets its own interval in the BootNotification response
    *   idTag ('VIRTUAL-CARD')     card used by start()
    *   waitForPlug (false)        RemoteStartTransaction waits for plugIn() instead of starting at once
- *   createSocket(url, protocols)  returns a WebSocket-like object; use it to pass headers in Node
-   *                              (e.g. Basic Auth with the `ws` package). Defaults to the global WebSocket.
+   *   authorizationKey, securityProfile  Basic Auth (profiles 1-2). Node only: browsers can't send it. The CSMS can
+   *                              also set the key with ChangeConfiguration AuthorizationKey; the charger then reconnects.
+   *   createSocket(url, protocols, headers)  returns a WebSocket-like object (headers: Authorization or null).
+   *                              Defaults to the global WebSocket (Node 22+ passes the headers; browsers can't).
    */
   return function OcppVirtualCharger(url, options) {
     options = options || {};
     var powerKw = options.powerKw || 7.4;
     var meterMs = (options.meterIntervalSec || 5) * 1000;
     var heartbeatMs = (options.heartbeatSec || 60) * 1000;
-    var ws = null, closed = false, outage = false, queue = [], pending = {}, heartbeat = null, meter = null;
+    var ws = null, closed = false, outage = false, rebooting = false, queue = [], pending = {}, heartbeat = null, meter = null;
+    // Basic Auth (OCPP security profiles 1-2): a browser can't send it, Node can. The key can come in the options or be
+    // set by the CSMS with ChangeConfiguration AuthorizationKey, which is how a platform provisions a new charger.
+    var canAuth = !!options.createSocket || typeof window === 'undefined';
+    var authKey = options.authorizationKey || null;
+    var securityProfile = options.securityProfile != null ? options.securityProfile : (authKey ? 2 : 0);
+    var identity = decodeURIComponent(String(url).replace(/\/+$/, '').split('/').pop());
+    var failures = 0, inoperativeAfterSession = false;
     var state = { connected: false, status: 'Available', transactionId: null, meterWh: 125000, powerKw: 0,
-                  idTag: null, plugged: false, sessionWh: 0, startedAt: null, offline: false, queued: 0, delivered: null };
+                  idTag: null, plugged: false, sessionWh: 0, startedAt: null, offline: false, queued: 0, delivered: null,
+                  available: true, rebooting: false, gaveUp: false };
     var waitingTag = null;   // card authorized (locally or remotely) before the cable was plugged in
 
     function changed() { state.awaitingPlug = !!waitingTag; if (options.onChange) try { options.onChange(state); } catch (e) {} }
@@ -79,7 +89,7 @@
       ] }] });
     }
     function startTransaction(idTag) {
-      if (state.transactionId) return;
+      if (state.transactionId || !state.available) return;
       state.plugged = true; waitingTag = null;
       state.idTag = idTag || options.idTag || 'VIRTUAL-CARD';
       (state.status === 'Preparing' ? Promise.resolve() : status('Preparing')).then(function () {
@@ -99,11 +109,15 @@
       // StopTransaction first, Available last: some CSMSs close a session as abandoned if Available arrives first
       call('StopTransaction', { transactionId: tx, meterStop: Math.round(state.meterWh), timestamp: now(), reason: reason || 'Remote' })
         .then(function () { return state.plugged ? status('Finishing') : null; })
-        .then(function () { if (thenUnplug) setTimeout(unplug, 1500); else if (!state.plugged) status('Available'); });
+        .then(function () {
+          if (inoperativeAfterSession) { inoperativeAfterSession = false; state.available = false; if (!state.plugged) return status('Unavailable'); }
+          if (thenUnplug) setTimeout(unplug, 1500); else if (!state.plugged) status(state.available ? 'Available' : 'Unavailable');
+        });
     }
     function plugIn() {
       if (state.plugged) return;
       state.plugged = true; changed();
+      if (!state.available) return;
       if (waitingTag) startTransaction(waitingTag);
       else if (!state.transactionId) status('Preparing');
     }
@@ -111,7 +125,7 @@
       if (!state.plugged) return;
       state.plugged = false; waitingTag = null; changed();
       if (state.transactionId) stopTransaction('EVDisconnected');
-      else status('Available');
+      else status(state.available ? 'Available' : 'Unavailable');
     }
     function tapCard(idTag) {
       idTag = idTag || options.idTag || 'VIRTUAL-CARD';
@@ -127,43 +141,110 @@
       });
     }
 
+    var KEYS = {   // configuration keys: [readonly, getter]
+      HeartbeatInterval: [false, function () { return String(heartbeatMs / 1000); }],
+      MeterValueSampleInterval: [false, function () { return String(meterMs / 1000); }],
+      MeterValuesSampledData: [true, function () { return 'Energy.Active.Import.Register,Power.Active.Import,Current.Import'; }],
+      NumberOfConnectors: [true, function () { return '1'; }],
+      StopTransactionOnEVSideDisconnect: [true, function () { return 'true'; }]
+    };
+    if (canAuth) KEYS.SecurityProfile = [false, function () { return String(securityProfile); }];
+
+    function reconnectSoon() {   // after a credential or profile change: back in with the new settings
+      setTimeout(function () { if (ws && ws.readyState === 1) ws.close(); }, 1500);
+    }
+    function changeConfiguration(key, value) {
+      if (key === 'AuthorizationKey') {
+        if (!canAuth) return 'NotSupported';                       // a browser can't send Basic Auth
+        if (typeof value !== 'string' || value.length < 16) return 'Rejected';
+        authKey = value; if (securityProfile < 1) securityProfile = 2; reconnectSoon(); return 'Accepted';
+      }
+      if (key === 'SecurityProfile') {
+        if (!canAuth) return 'NotSupported';
+        var v = parseInt(value, 10);
+        if (isNaN(v) || v < securityProfile || v > 2 || !authKey) return 'Rejected';   // no downgrade; 3 needs client certificates
+        securityProfile = v; reconnectSoon(); return 'Accepted';
+      }
+      if (key === 'HeartbeatInterval' || key === 'MeterValueSampleInterval') {
+        var n = parseInt(value, 10);
+        if (isNaN(n) || n < 1) return 'Rejected';
+        if (key === 'HeartbeatInterval') {
+          heartbeatMs = n * 1000; clearInterval(heartbeat);
+          heartbeat = setInterval(function () { call('Heartbeat', {}); }, heartbeatMs);
+        } else {
+          meterMs = n * 1000;
+          if (meter) { clearInterval(meter); meter = setInterval(sample, meterMs); }
+        }
+        return 'Accepted';
+      }
+      return KEYS[key] ? 'Rejected' : 'NotSupported';
+    }
+
     function answer(id, action, payload) {
       var r = { status: 'Accepted' };
       if (action === 'RemoteStartTransaction') {
-        r.status = state.transactionId ? 'Rejected' : 'Accepted';
-        if (!state.transactionId) setTimeout(function () {
+        r.status = state.transactionId || !state.available ? 'Rejected' : 'Accepted';
+        if (r.status === 'Accepted') setTimeout(function () {
           if (state.plugged || !options.waitForPlug) startTransaction(payload.idTag); else { waitingTag = payload.idTag; changed(); }
         }, 800);
       } else if (action === 'RemoteStopTransaction') {
         r.status = state.transactionId && payload.transactionId == state.transactionId ? 'Accepted' : 'Rejected';
         if (r.status === 'Accepted') setTimeout(function () { stopTransaction('Remote'); }, 800);
       } else if (action === 'GetConfiguration') {
-        r = { configurationKey: [
-          { key: 'HeartbeatInterval', readonly: false, value: String(heartbeatMs / 1000) },
-          { key: 'MeterValueSampleInterval', readonly: false, value: String(meterMs / 1000) },
-          { key: 'MeterValuesSampledData', readonly: false, value: 'Energy.Active.Import.Register,Power.Active.Import,Current.Import' },
-          { key: 'NumberOfConnectors', readonly: true, value: '1' },
-          { key: 'StopTransactionOnEVSideDisconnect', readonly: false, value: 'true' }] };
+        var asked = payload.key && payload.key.length ? payload.key : Object.keys(KEYS);
+        r = { configurationKey: [], unknownKey: [] };
+        asked.forEach(function (k) {
+          if (KEYS[k]) r.configurationKey.push({ key: k, readonly: KEYS[k][0], value: KEYS[k][1]() });
+          else r.unknownKey.push(k);
+        });
+      } else if (action === 'ChangeConfiguration') {
+        r.status = changeConfiguration(payload.key, payload.value);
       } else if (action === 'TriggerMessage') {
         var what = payload.requestedMessage;
-        setTimeout(function () {
+        if (['Heartbeat', 'StatusNotification', 'MeterValues', 'BootNotification'].indexOf(what) < 0) r.status = 'NotImplemented';
+        else setTimeout(function () {
           if (what === 'Heartbeat') call('Heartbeat', {});
           else if (what === 'StatusNotification') status(state.status);
           else if (what === 'MeterValues') {
             if (state.transactionId) sample();
             else call('MeterValues', { connectorId: 1, meterValue: [{ timestamp: now(), sampledValue: [
               { value: String(Math.round(state.meterWh)), measurand: 'Energy.Active.Import.Register', unit: 'Wh' }] }] });
-          } else if (what === 'BootNotification') boot();
+          } else boot();
         }, 500);
+      } else if (action === 'ChangeAvailability') {
+        var operative = payload.type === 'Operative';
+        if (!operative && state.transactionId) { inoperativeAfterSession = true; r.status = 'Scheduled'; }
+        else setTimeout(function () {
+          state.available = operative; inoperativeAfterSession = false;
+          status(!operative ? 'Unavailable' : (state.plugged ? 'Preparing' : 'Available'));
+        }, 300);
       } else if (action === 'UnlockConnector') {
         r = { status: 'Unlocked' };
-      } else if (action === 'ChangeConfiguration' || action === 'ChangeAvailability' || action === 'Reset' || action === 'ClearCache') {
-        // Acknowledged, not acted upon: this is a simulator, not a full implementation
+        setTimeout(function () { if (state.transactionId) stopTransaction('UnlockCommand'); unplugQuietly(); }, 300);
+      } else if (action === 'Reset') {
+        setTimeout(function () { reboot(payload.type === 'Hard' ? 'HardReset' : 'SoftReset'); }, 500);
+      } else if (action === 'ClearCache') {
+        // Nothing cached: accepted, honestly
       } else {
         send([4, id, 'NotImplemented', 'Not implemented by the virtual charger', {}]);
         return;
       }
       send([3, id, r]);
+    }
+
+    function unplugQuietly() {   // the cable is released; the driver pulls it out
+      if (!state.plugged) return;
+      state.plugged = false; waitingTag = null; changed();
+      if (!state.transactionId) status(state.available ? 'Available' : 'Unavailable');
+    }
+
+    function reboot(reason) {
+      if (state.transactionId) stopTransaction(reason);
+      setTimeout(function () {
+        rebooting = true; state.rebooting = true; changed();
+        if (ws) ws.close();
+        setTimeout(function () { rebooting = false; state.rebooting = false; if (!closed) connect(); }, 5000);
+      }, 800);
     }
 
     function boot() {
@@ -175,9 +256,19 @@
         });
     }
 
+    function basicAuth() {
+      if (!authKey || securityProfile < 1) return null;
+      var raw = identity + ':' + authKey;
+      return 'Basic ' + (typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(raw))) : Buffer.from(raw).toString('base64'));
+    }
     function connect() {
-      ws = options.createSocket ? options.createSocket(url, ['ocpp1.6']) : new WebSocket(url, ['ocpp1.6']);
+      var auth = basicAuth(), headers = auth ? { Authorization: auth } : null;
+      var opened = false;
+      if (options.createSocket) ws = options.createSocket(url, ['ocpp1.6'], headers);
+      else if (headers && typeof window === 'undefined') ws = new WebSocket(url, { protocols: ['ocpp1.6'], headers: headers });
+      else ws = new WebSocket(url, ['ocpp1.6']);
       ws.onopen = function () {
+        opened = true; failures = 0; state.gaveUp = false;
         state.connected = true; state.offline = false; changed();
         boot()
           .then(function () {
@@ -206,7 +297,11 @@
         clearInterval(heartbeat);
         if (outage) return;   // simulated outage: keeps charging and metering until the network is back
         clearInterval(meter); meter = null;
-        if (!closed) setTimeout(connect, 3000);   // reconnect on its own, like real hardware
+        if (rebooting || closed) return;
+        // Turned away at the handshake (wrong address, missing or wrong key): back off, and after 5 refusals in a row
+        // stop, instead of knocking every 3 s and setting off the CSMS's "rejected charger" alerts.
+        if (!opened && ++failures >= 5) { state.gaveUp = true; changed(); return; }
+        setTimeout(connect, opened ? 3000 : 3000 * Math.pow(2, failures - 1));
       };
     }
 
@@ -230,6 +325,8 @@
         ws.close();
         setTimeout(function () { outage = false; if (!closed) connect(); }, (seconds || 20) * 1000);
       },
+      /** Try again after giving up (state.gaveUp). */
+      retry: function () { if (!closed && state.gaveUp) { failures = 0; state.gaveUp = false; changed(); connect(); } },
       /** Disconnect for good. */
       close: function () { closed = true; clearInterval(heartbeat); clearInterval(meter); if (ws) ws.close(); }
     };

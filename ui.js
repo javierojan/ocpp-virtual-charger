@@ -18,6 +18,9 @@
     sAvail: ['Disponible', 'Enchufe el coche', 'o pase su tarjeta'], sPrep: ['Pase su tarjeta', 'para empezar', ''],
     sAuth: ['Tarjeta aceptada', 'Enchufe el coche', ''], sChg: ['Cargando', '', ''], sFin: ['Carga terminada', '', 'Retire el cable'],
     sBad: ['Tarjeta no válida', '', ''], sOut: ['Sin red', 'sigue cargando', ''],
+    sUnav: ['Fuera de servicio', '', ''], sBoot: ['Reiniciando…', '', ''], sGave: ['Rechazado', 'por el servidor', ''],
+    hGave: 'El servidor no deja entrar a este cargador. Si lo aceptaste con clave: un navegador no puede mandarla, déjalo en pruebas sin clave. Si no, revisa la dirección.',
+    hUnav: 'Fuera de servicio por orden del panel (ChangeAvailability).', retry: 'Reintentar',
     hOff: 'Enciende el cargador para empezar.', hAvail: 'Enchufa el coche (o pulsa sobre él) y pasa la tarjeta.',
     hPrep: 'Ahora pasa la tarjeta por el lector.', hAuth: 'Tarjeta aceptada: enchufa el coche.', hChg: 'Cargando. Pasa la misma tarjeta para parar, o desenchufa.',
     hFin: 'Carga terminada: desenchufa el coche.', hOut: 'Corte de red: sigue cargando y guarda los mensajes para cuando vuelva.',
@@ -29,6 +32,9 @@
     sAvail: ['Available', 'Plug the car in', 'or tap your card'], sPrep: ['Tap your card', 'to start', ''],
     sAuth: ['Card accepted', 'Plug the car in', ''], sChg: ['Charging', '', ''], sFin: ['Session ended', '', 'Unplug the cable'],
     sBad: ['Card not valid', '', ''], sOut: ['Offline', 'still charging', ''],
+    sUnav: ['Out of service', '', ''], sBoot: ['Rebooting…', '', ''], sGave: ['Rejected', 'by the server', ''],
+    hGave: 'The server won\'t let this charger in. If you accepted it with a key: a browser can\'t send it, keep it in testing without a key. Otherwise, check the address.',
+    hUnav: 'Out of service, by order of the CSMS (ChangeAvailability).', retry: 'Try again',
     hOff: 'Switch the charger on to start.', hAvail: 'Plug the car in (or click it) and tap the card.',
     hPrep: 'Now tap the card on the reader.', hAuth: 'Card accepted: plug the car in.', hChg: 'Charging. Tap the same card to stop, or unplug.',
     hFin: 'Session ended: unplug the car.', hOut: 'Network outage: it keeps charging and queues its messages for when it is back.',
@@ -78,12 +84,15 @@
     var lines, hint;
     if (!s) { lines = TXT.sOff; hint = TXT.hOff; }
     else if (flash) { lines = flash; hint = $('hint').textContent; }
+    else if (s.gaveUp) { lines = TXT.sGave; hint = TXT.hGave; }
+    else if (s.rebooting) { lines = TXT.sBoot; hint = ''; }
     else if (s.offline) { lines = [TXT.sOut[0], TXT.sOut[1], fmt(s.sessionWh / 1000, 2) + ' kWh']; hint = TXT.hOut; }
     else if (!s.connected) { lines = TXT.sNet; hint = ''; }
     else if (s.status === 'Charging') {
       lines = [TXT.sChg[0], fmt(s.powerKw, 1) + ' kW · ' + fmt(s.sessionWh / 1000, 2) + ' kWh', clock(Date.now() - (s.startedAt || Date.now()))];
       hint = TXT.hChg;
     } else if (s.status === 'Finishing') { lines = [TXT.sFin[0], fmt(s.sessionWh / 1000, 2) + ' kWh', TXT.sFin[2]]; hint = TXT.hFin; }
+    else if (s.status === 'Unavailable') { lines = TXT.sUnav; hint = TXT.hUnav; }
     else if (s.awaitingPlug) { lines = TXT.sAuth; hint = TXT.hAuth; }
     else if (s.status === 'Preparing') { lines = TXT.sPrep; hint = TXT.hPrep; }
     else { lines = TXT.sAvail; hint = TXT.hAvail; }
@@ -100,6 +109,7 @@
     $('b-card').disabled = !on || !s.connected;
     $('b-outage').disabled = !on || !s.connected;
     $('b-plug').textContent = s && s.plugged ? TXT.unplug : TXT.plug;
+    $('b-retry').hidden = !(s && s.gaveUp);
 
     $('s-conn').textContent = !s ? TXT.off : (s.offline ? TXT.offline : (s.connected ? TXT.connected : TXT.reconnecting));
     $('s-status').textContent = s ? s.status : '—';
@@ -112,7 +122,7 @@
     if (charger) charger.close();
     $('log').textContent = '';
     charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true,
-      model: ES ? 'Cargador virtual' : 'Virtual charger' });
+      model: ES ? 'Cargador virtual (navegador)' : 'Virtual charger (browser)' });
     paint();
   }
 
@@ -157,6 +167,7 @@
   $('b-card').onclick = tap;
   $('rfidcard').addEventListener('click', tap);
   $('b-outage').onclick = function () { if (charger) charger.outage(20); };
+  $('b-retry').onclick = function () { if (charger) charger.retry(); };
 
   setInterval(function () { if (charger && charger.state.status === 'Charging') paint(); }, 1000);   // the clock on the screen
   paint();
