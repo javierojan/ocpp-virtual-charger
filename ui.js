@@ -20,7 +20,9 @@
     sBad: ['Tarjeta no válida', '', ''], sOut: ['Sin red', 'sigue cargando', ''],
     sUnav: ['Fuera de servicio', '', ''], sBoot: ['Reiniciando…', '', ''], sGave: ['Rechazado', 'por el servidor', ''],
     hGave: 'El servidor no deja entrar a este cargador. Si lo aceptaste con clave: un navegador no puede mandarla, déjalo en pruebas sin clave. Si no, revisa la dirección.',
-    hUnav: 'Fuera de servicio por orden del panel (ChangeAvailability).', retry: 'Reintentar',
+    hUnav: 'Fuera de servicio por orden del panel (ChangeAvailability).', retry: 'Reintentar', power: 'Potencia',
+    promoT: '¿Tienes cargadores de verdad?', promoB: 'Prueba 30 días gratis',
+    promoP: 'askacharge.com los gestiona con estándares abiertos: tus tarifas, tus cobros y tus sesiones, sin atarte a ningún fabricante. Pruébalo 30 días gratis, sin tarjeta.',
     hOff: 'Enciende el cargador para empezar.', hAvail: 'Enchufa el coche (o pulsa sobre él) y pasa la tarjeta.',
     hPrep: 'Ahora pasa la tarjeta por el lector.', hAuth: 'Tarjeta aceptada: enchufa el coche.', hChg: 'Cargando. Pasa la misma tarjeta para parar, o desenchufa.',
     hFin: 'Carga terminada: desenchufa el coche.', hOut: 'Corte de red: sigue cargando y guarda los mensajes para cuando vuelva.',
@@ -46,6 +48,20 @@
       if (TXT[el.dataset.t]) el.textContent = TXT[el.dataset.t];
     });
   }
+
+  // Power selector: rated power of the charger; it can change mid-session (the next reading shows it)
+  var ratedKw = 7.4;
+  function ratingText(kw) { return fmt(kw, kw % 1 ? 1 : 0) + ' kW ' + (kw > 22 ? 'DC' : 'AC'); }
+  Array.prototype.forEach.call(document.querySelectorAll('#power button'), function (b) {
+    b.textContent = ratingText(parseFloat(b.dataset.kw)).replace(' AC', '');
+    b.onclick = function () {
+      ratedKw = parseFloat(b.dataset.kw);
+      Array.prototype.forEach.call(document.querySelectorAll('#power button'), function (x) { x.classList.toggle('on', x === b); });
+      $('rating').textContent = ratingText(ratedKw);
+      if (charger) charger.setPower(ratedKw);
+    };
+  });
+  $('rating').textContent = ratingText(ratedKw);
 
   var CABLE_OUT = 'M145 266 C 145 330, 120 345, 110 300';
   var CABLE_IN = 'M145 266 C 170 372, 560 372, 602 256';
@@ -121,7 +137,7 @@
   function start(url) {
     if (charger) charger.close();
     $('log').textContent = '';
-    charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true,
+    charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true, powerKw: ratedKw,
       model: ES ? 'Cargador virtual (navegador)' : 'Virtual charger (browser)' });
     paint();
   }

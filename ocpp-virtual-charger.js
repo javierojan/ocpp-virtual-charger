@@ -50,7 +50,7 @@
     var failures = 0, inoperativeAfterSession = false;
     var state = { connected: false, status: 'Available', transactionId: null, meterWh: 125000, powerKw: 0,
                   idTag: null, plugged: false, sessionWh: 0, startedAt: null, offline: false, queued: 0, delivered: null,
-                  available: true, rebooting: false, gaveUp: false };
+                  available: true, rebooting: false, gaveUp: false, ratedKw: powerKw };
     var waitingTag = null;   // card authorized (locally or remotely) before the cable was plugged in
 
     function changed() { state.awaitingPlug = !!waitingTag; if (options.onChange) try { options.onChange(state); } catch (e) {} }
@@ -78,15 +78,24 @@
       state.status = s; changed();
       return call('StatusNotification', { connectorId: 1, status: s, errorCode: 'NoError', timestamp: now() });
     }
+    // How the power is delivered: AC up to 7.4 kW on one phase (230 V), AC above that on three phases
+    // (230 V each, 11 and 22 kW), and DC above 22 kW (current at a 400 V battery, no phases).
+    function currents(kw) {
+      var w = kw * 1000;
+      if (kw > 22) return [{ value: (w / 400).toFixed(1), measurand: 'Current.Import', unit: 'A', context: 'Sample.Periodic' }];
+      if (kw > 7.4) return ['L1', 'L2', 'L3'].map(function (ph) {
+        return { value: (w / 3 / 230).toFixed(1), measurand: 'Current.Import', unit: 'A', phase: ph, context: 'Sample.Periodic' };
+      });
+      return [{ value: (w / 230).toFixed(1), measurand: 'Current.Import', unit: 'A', phase: 'L1', context: 'Sample.Periodic' }];
+    }
     function sample() {
-      var kw = powerKw - 0.2 + Math.random() * 0.4;
+      var kw = powerKw * (0.97 + Math.random() * 0.03);   // a real charger rarely delivers its full rating
       var wh = kw * 1000 * (meterMs / 1000) / 3600;
       state.powerKw = kw; state.meterWh += wh; state.sessionWh += wh; changed();
       return call('MeterValues', { connectorId: 1, transactionId: state.transactionId, meterValue: [{ timestamp: now(), sampledValue: [
         { value: String(Math.round(state.meterWh)), measurand: 'Energy.Active.Import.Register', unit: 'Wh', context: 'Sample.Periodic' },
-        { value: String(Math.round(kw * 1000)), measurand: 'Power.Active.Import', unit: 'W', context: 'Sample.Periodic' },
-        { value: (kw * 1000 / 230).toFixed(1), measurand: 'Current.Import', unit: 'A', phase: 'L1', context: 'Sample.Periodic' }
-      ] }] });
+        { value: String(Math.round(kw * 1000)), measurand: 'Power.Active.Import', unit: 'W', context: 'Sample.Periodic' }
+      ].concat(currents(kw)) }] });
     }
     function startTransaction(idTag) {
       if (state.transactionId || !state.available) return;
@@ -325,6 +334,8 @@
         ws.close();
         setTimeout(function () { outage = false; if (!closed) connect(); }, (seconds || 20) * 1000);
       },
+      /** Change the charger's rated power (kW). Up to 7.4 one-phase AC, up to 22 three-phase AC, above that DC. */
+      setPower: function (kw) { powerKw = kw; state.ratedKw = kw; if (meter) sample(); else changed(); },
       /** Try again after giving up (state.gaveUp). */
       retry: function () { if (!closed && state.gaveUp) { failures = 0; state.gaveUp = false; changed(); connect(); } },
       /** Disconnect for good. */

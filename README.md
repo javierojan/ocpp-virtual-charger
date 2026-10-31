@@ -16,7 +16,13 @@ It behaves like a real charger on the wire:
 - **Network outage simulation**: it keeps charging while offline, queues its `MeterValues`, `StatusNotification`
   and `StopTransaction`, and delivers them in order, with their original timestamps, when it reconnects.
   Useful to check how your CSMS handles late meter values.
-- Reconnects on its own when the connection drops, like real hardware.
+- Reconnects on its own when the connection drops, like real hardware, and stops after 5 refused handshakes in a row
+  instead of hammering the CSMS.
+- Commands that act, not just answer: `Reset` reboots it, `ChangeAvailability` takes it out of service (`Scheduled`
+  while charging), `UnlockConnector` releases the cable, interval changes apply.
+- **Credential provisioning**: in Node it accepts `ChangeConfiguration AuthorizationKey` (and `SecurityProfile` up to 2)
+  and reconnects with Basic Auth, the way a CSMS hands a key to a new charger. In a browser it answers `NotSupported`.
+- Power selector on the demo page: 3.7, 7.4, 11, 22 kW AC and 50, 150 kW DC.
 
 ## Use it in the browser
 
@@ -67,7 +73,7 @@ const charger = OcppVirtualCharger('wss://your-csms.example/ocpp/CP-001', {
 | `onChange(state)` | — | Called on every state change |
 | `onFrame(direction, frame)` | — | `'out'` or `'in'`, with the raw OCPP-J frame |
 | `vendor`, `model`, `firmware` | `ocpp-virtual-charger`, `Virtual charger`, `1.0` | Sent in `BootNotification` |
-| `powerKw` | `7.4` | Charging power |
+| `powerKw` | `7.4` | Rated power. Up to 7.4 kW: one-phase AC; up to 22 kW: three-phase AC (current on L1, L2, L3); above: DC. `setPower(kw)` changes it, mid-session too |
 | `meterIntervalSec` | `5` | `MeterValues` interval while charging |
 | `heartbeatSec` | `60` | Until the CSMS sets its own interval |
 | `idTag` | `VIRTUAL-CARD` | Card used by `start()` |
