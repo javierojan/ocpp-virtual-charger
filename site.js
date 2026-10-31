@@ -1,322 +1,431 @@
-// The site page (site.html): several virtual chargers behind one grid connection, driven by ocpp-virtual-charger.js.
-// Everything that shapes the test is a setting on the page (grid connection, building load, posts, connectors,
-// power, cars), kept in localStorage so a scenario survives a reload.
+// The site page (site.html): a car park seen from above, with virtual OCPP chargers (ocpp-virtual-charger.js), a small
+// building next to it and one grid connection (LGA) for both. Click a charger to name it and set its power; cars drive
+// in, charge and leave. Everything that shapes the test is a setting on the page, kept in localStorage.
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var ES = /^es\b/i.test(navigator.language || '') || /[?&]lang=es\b/.test(location.search);
   var HOSTED = location.hostname === 'askacharge.com';
+  var SVGNS = 'http://www.w3.org/2000/svg';
 
   var TXT = ES ? {
     title: 'Simulador de instalación de carga OCPP',
-    lead: 'Varios cargadores detrás de una sola acometida, coches que se llenan y perfiles de carga OCPP que limitan la potencia de verdad. Para probar el reparto de carga de una plataforma.',
-    setup: 'Instalación', gridKw: 'Potencia de la acometida (kW)', baseKw: 'Consumo del edificio (kW)', baseVar: 'El consumo del edificio varía',
-    tripLbl: 'Salta el general si se supera durante', never: 'Nunca', speed: 'Las baterías se llenan', speedNote: 'Solo las baterías: el contador cuenta la energía real.', real: 'a velocidad real',
-    arrivals: 'Llegan coches solos', arr60: '≈ cada minuto', arr300: '≈ cada 5 minutos', no: 'No', yes: 'Sí',
-    posts: 'Puestos de carga', thConn: 'Mangueras', thKw: 'kW cada una', thMax: 'Máx. del puesto (kW)', addPost: '+ Añadir puesto',
-    target: 'Dónde se conectan los cargadores', modeTest: 'Servidor de pruebas OCPP de askacharge.com (gratis, sin cuenta)', modeOwn: 'Mi CSMS',
-    baseUrl: 'Dirección OCPP sin la identidad (acaba en /)', prefix: 'Prefijo de la identidad',
-    ownHelp: 'Cada cargador es esta dirección + su identidad. Desde el navegador no se puede mandar contraseña (Basic Auth): usa un CSMS o un entorno de pruebas que los acepte sin ella, o lanza la instalación desde Node.',
-    start: 'Encender la instalación', stopAll: 'Apagarlo todo', watch: 'Verlo en el servidor de pruebas →',
-    install: 'Acometida', grid: 'Red', board: 'Cuadro', board2: 'general', building: 'Edificio', chargers: 'Cargadores',
-    draw: 'Consumo de la red', lgTotal: 'consumo de la red', lgChg: 'cargadores', lgLim: 'acometida', lgWin: 'últimos 10 minutos',
+    lead: 'Un parking visto desde arriba, con un edificio al lado y una sola acometida para los dos. Pincha en un cargador para ponerle nombre y potencia, enciende la instalación y mira cómo entran los coches, cargan y se van, mientras cada mensaje OCPP va a un servidor de verdad.',
+    addrLbl: 'Dirección genérica (al final se añade el nombre de cada cargador)', gridKw: 'Potencia de la LGA (acometida)',
+    arrivals: 'Llegan coches', arrNo: 'solo cuando los mando', arrBusy: 'a menudo', arrCalm: 'de vez en cuando',
+    speed: 'Las baterías se llenan', real: 'a velocidad real', start: 'Encender la instalación', stopAll: 'Apagar',
+    addrHelp: 'Desde el navegador los cargadores conectan sin contraseña (un navegador no puede mandar Basic Auth). ¿Sin CSMS?',
+    useTest: 'Usar el servidor de pruebas gratuito de askacharge.com', watch: 'ver lo que recibe →',
+    parkHelp: 'Pincha en un cargador para ponerle nombre y potencia · en una plaza libre para mandar un coche · en un coche para que se vaya.',
+    draw: 'Consumo de la LGA', lgChg: 'cargadores', lgTot: 'con el edificio', lgLim: 'LGA', lgWin: '10 min', more: 'Más ajustes',
+    baseKw: 'Edificio: consumo habitual (kW)', peaksLbl: 'Edificio: picos de consumo (ascensor, calefacción, cocina)',
+    peaksSome: 'de vez en cuando', peaksMany: 'a menudo',
+    tripLbl: 'Salta el general si se supera durante', never: 'Nunca', nChg: 'Cargadores en el parking',
     frames: 'Mensajes OCPP', all: 'Todos los cargadores', hideMeter: 'ocultar MeterValues y Heartbeat',
     promoT: '¿Tienes una instalación de verdad?', promoB: 'Prueba 30 días gratis',
     promoP: 'askacharge.com reparte la potencia de una instalación entre sus cargadores con OCPP estándar, con tus tarifas y tus cobros, y sin atarte a ningún fabricante. Pruébalo 30 días gratis, sin tarjeta.',
-    simple: 'Un simulador, dicho claro: el OCPP es de verdad; la física está simplificada (curvas de carga de los coches, consumo del edificio).',
+    simple: 'Un simulador, dicho claro: el OCPP es de verdad; la física está simplificada (curvas de carga de los coches, consumo del edificio). Solo se aceleran las baterías: el contador cuenta siempre la energía real.',
     single: 'Un solo cargador', madeby: 'Hecho por',
-    of: 'de {k} kW', over: 'Por encima de la acometida', ok: 'Dentro de la acometida', tripped: '⚡ Ha saltado el general: sin luz {s} s',
-    tripIn: 'Salta el general en {s} s', online: 'conectado', offline: 'sin red', powerOff: 'sin luz', connecting: 'conectando…', gaveUp: 'rechazado',
-    conn: 'Manguera {n}', plug: 'Enchufar', unplug: 'Desenchufar', card: 'Pasar tarjeta', stopCard: 'Parar (tarjeta)',
-    netCut: 'Corte de red 20 s', powerCut: 'Corte de luz 30 s', limit: 'Límite {k} kW · {by}', postMax: 'Puesto limitado a {k} kW · {by}',
-    full: 'lleno', waitCard: 'esperando la tarjeta', session: '{k} kWh', remove: 'Quitar',
-    needTest: 'El servidor de pruebas admite hasta 5 cargadores por código: con más puestos, usa tu CSMS.',
-    noUrl: 'Escribe la dirección OCPP de tu CSMS, acabada en /.', noCode: 'No se ha podido pedir un código al servidor de pruebas. Usa tu CSMS.',
-    cars: { small: 'Utilitario 40 kWh · 7,4 kW', saloon: 'Berlina 64 kWh · 11 kW', suv: 'SUV 77 kWh · 11 kW', van: 'Furgoneta 75 kWh · 22 kW', phev: 'Híbrido 13 kWh · 3,7 kW' }
+    nameLbl: 'Nombre (identidad OCPP)', kwLbl: 'Potencia por manguera', hosesLbl: 'Mangueras', maxLbl: 'El cargador entero, como mucho (kW)',
+    dlgNote: 'Si la instalación está encendida, solo se reconecta este cargador.', cancel: 'Cancelar', save: 'Guardar',
+    charger: 'Cargador {n}', of: 'de {k} kW', over: 'Por encima de la LGA', ok: 'Dentro de la LGA',
+    tripped: '⚡ Ha saltado el general: sin luz {s} s', tripIn: 'Salta el general en {s} s', building: 'edificio {k} kW',
+    noUrl: 'Escribe la dirección genérica, acabada en /.', noCode: 'No se ha podido pedir un código al servidor de pruebas.',
+    dupName: 'Ya hay un cargador con ese nombre.', online: 'conectado', offline: 'sin red', powerOff: 'sin luz', gaveUp: 'rechazado', connecting: 'conectando…', off: 'apagado',
+    full: 'lleno', waiting: 'esperando tarjeta', paused: 'en pausa', bld: 'EDIFICIO', peak: 'pico', inn: 'ENTRADA →', outt: '← SALIDA'
   } : {
-    of: 'of {k} kW', over: 'Above the grid connection', ok: 'Within the grid connection', tripped: '⚡ The main breaker tripped: no power for {s} s',
-    tripIn: 'Main breaker trips in {s} s', online: 'online', offline: 'offline', powerOff: 'no power', connecting: 'connecting…', gaveUp: 'rejected',
-    conn: 'Connector {n}', plug: 'Plug in', unplug: 'Unplug', card: 'Tap card', stopCard: 'Stop (card)',
-    netCut: 'Network outage 20 s', powerCut: 'Power cut 30 s', limit: 'Limit {k} kW · {by}', postMax: 'Post limited to {k} kW · {by}',
-    full: 'full', waitCard: 'waiting for a card', session: '{k} kWh', remove: 'Remove',
-    needTest: 'The test server takes up to 5 chargers per code: with more posts, use your own CSMS.',
-    noUrl: 'Type your CSMS OCPP address, ending in /.', noCode: 'Could not get a code from the test server. Use your own CSMS.',
-    cars: { small: 'Small car 40 kWh · 7.4 kW', saloon: 'Saloon 64 kWh · 11 kW', suv: 'SUV 77 kWh · 11 kW', van: 'Van 75 kWh · 22 kW', phev: 'Plug-in hybrid 13 kWh · 3.7 kW' }
+    charger: 'Charger {n}', of: 'of {k} kW', over: 'Above the LGA', ok: 'Within the LGA',
+    tripped: '⚡ The main breaker tripped: no power for {s} s', tripIn: 'Main breaker trips in {s} s', building: 'building {k} kW',
+    noUrl: 'Type the generic address, ending in /.', noCode: 'Could not get a code from the test server.',
+    dupName: 'There is already a charger with that name.', online: 'online', offline: 'offline', powerOff: 'no power', gaveUp: 'rejected', connecting: 'connecting…', off: 'off',
+    full: 'full', waiting: 'waiting for a card', paused: 'paused', all: 'All chargers', bld: 'BUILDING', peak: 'peak', inn: 'IN →', outt: '← OUT'
   };
   function t(k, v) { var s = TXT[k] || k; Object.keys(v || {}).forEach(function (x) { s = s.replace('{' + x + '}', v[x]); }); return s; }
   if (ES) {
     document.documentElement.lang = 'es';
-    document.title = 'Simulador de instalación de carga OCPP — varios cargadores, una acometida';
-    Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (el) { if (TXT[el.dataset.t]) el.textContent = TXT[el.dataset.t]; });
+    document.title = 'Simulador de instalación de carga OCPP — un parking visto desde arriba';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (e) { if (TXT[e.dataset.t]) e.textContent = TXT[e.dataset.t]; });
   }
   function fmt(n, d) { return Number(n || 0).toLocaleString(ES ? 'es-ES' : 'en-GB', { minimumFractionDigits: d, maximumFractionDigits: d }); }
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(e);
+    return e;
+  }
 
-  // Cars: battery, what they accept in AC and DC, phases. A simulator's cars, not a catalogue.
-  var CARS = {
-    small: { batteryKwh: 40, maxAcKw: 7.4, maxDcKw: 50, phases: 1 },
-    saloon: { batteryKwh: 64, maxAcKw: 11, maxDcKw: 100, phases: 3 },
-    suv: { batteryKwh: 77, maxAcKw: 11, maxDcKw: 150, phases: 3 },
-    van: { batteryKwh: 75, maxAcKw: 22, maxDcKw: 80, phases: 3 },
-    phev: { batteryKwh: 13, maxAcKw: 3.7, maxDcKw: 0, phases: 1 }
-  };
-  var POWERS = [3.7, 7.4, 11, 22, 50, 150];
+  // Cars: battery, what they accept, phases, and a colour for the drawing
+  var CARS = [
+    { batteryKwh: 40, maxAcKw: 7.4, maxDcKw: 50, phases: 1, color: '#ef4444' },
+    { batteryKwh: 64, maxAcKw: 11, maxDcKw: 100, phases: 3, color: '#3b82f6' },
+    { batteryKwh: 77, maxAcKw: 11, maxDcKw: 150, phases: 3, color: '#f8fafc' },
+    { batteryKwh: 100, maxAcKw: 22, maxDcKw: 150, phases: 3, color: '#111827' },
+    { batteryKwh: 58, maxAcKw: 11, maxDcKw: 120, phases: 3, color: '#f59e0b' },
+    { batteryKwh: 75, maxAcKw: 22, maxDcKw: 80, phases: 3, color: '#10b981' }
+  ];
 
   // ── Settings ────────────────────────────────────────────────────────────────────────────────────────
-  var DEFAULT = { grid: 30, base: 6, baseVar: 1, trip: 0, speed: 1, arr: 0, mode: HOSTED ? 'test' : 'own', url: '', prefix: 'SITE',
-                  posts: [{ conn: 2, kw: 11, max: 22 }, { conn: 2, kw: 11, max: 22 }, { conn: 2, kw: 22, max: 22 }, { conn: 2, kw: 22, max: 44 }] };
+  var DEFAULT = { url: '', grid: 43.6, arr: 40, speed: 1, base: 6, peaks: 1, trip: 0, n: 4, chargers: [] };
+  for (var i = 0; i < 6; i++) DEFAULT.chargers.push({ name: 'SITE-' + (i + 1), kw: i < 2 ? 11 : 22, hoses: 2, max: 22 });
   var cfg;
-  try { cfg = JSON.parse(localStorage.getItem('ovc-site') || 'null'); } catch (e) {}
-  if (!cfg || !cfg.posts) cfg = JSON.parse(JSON.stringify(DEFAULT));
-  function save() { try { localStorage.setItem('ovc-site', JSON.stringify(cfg)); } catch (e) {} }
-
-  function bind(id, key, num) {
-    var el = $(id); el.value = cfg[key];
-    el.onchange = function () { cfg[key] = num ? parseFloat(el.value) || 0 : el.value; save(); applyLive(); };
+  try { cfg = JSON.parse(localStorage.getItem('ovc-parking') || 'null'); } catch (e) {}
+  if (!cfg || !cfg.chargers) cfg = JSON.parse(JSON.stringify(DEFAULT));
+  Object.keys(DEFAULT).forEach(function (k) { if (cfg[k] === undefined) cfg[k] = DEFAULT[k]; });
+  function save() { try { localStorage.setItem('ovc-parking', JSON.stringify(cfg)); } catch (e) {} }
+  function bind(id, key, num, after) {
+    var e = $(id); e.value = String(cfg[key]);
+    if (e.tagName === 'SELECT' && e.value !== String(cfg[key])) { cfg[key] = num ? parseFloat(e.options[0].value) : e.options[0].value; e.value = String(cfg[key]); }
+    e.onchange = function () { cfg[key] = num ? parseFloat(e.value) || 0 : e.value.trim(); save(); if (after) after(); };
   }
-  bind('c-grid', 'grid', true); bind('c-base', 'base', true); bind('c-basevar', 'baseVar', true); bind('c-trip', 'trip', true);
-  bind('c-speed', 'speed', true); bind('c-arr', 'arr', true); bind('c-url', 'url'); bind('c-prefix', 'prefix');
-  var mode = $('c-mode'); mode.value = HOSTED ? cfg.mode : 'own'; mode.disabled = !HOSTED;
-  function showMode() { $('own').hidden = mode.value !== 'own'; }
-  mode.onchange = function () { cfg.mode = mode.value; save(); showMode(); }; showMode();
+  bind('c-url', 'url'); bind('c-grid', 'grid', true, function () { lgaLabel(); }); bind('c-arr', 'arr', true);
+  bind('c-base', 'base', true); bind('c-peaks', 'peaks', true); bind('c-trip', 'trip', true);
+  bind('c-speed', 'speed', true, function () { live.forEach(function (c) { if (c) c.charger.setSocSpeed(cfg.speed); }); });
+  bind('c-n', 'n', true, function () { if (!running) layout(); });
+  $('b-test').hidden = !HOSTED;
+  $('b-test').onclick = function (e) {
+    e.preventDefault();
+    fetch('/askacharge/ocpp-test/api/nuevo', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.codigo) throw new Error('no code');
+      cfg.url = 'wss://askacharge.com/askacharge/ocpp-test/' + d.codigo + '/'; save(); $('c-url').value = cfg.url;
+      var w = $('watch'); w.hidden = false;
+      w.href = '/askacharge/' + (ES ? 'probar-ocpp.html' : 'en/ocpp-test-server.html') + '?c=' + d.codigo + '&src=virtual-site';
+    }).catch(function () { $('msg').textContent = TXT.noCode; });
+  };
 
-  function renderPostsEditor() {
-    var tb = $('c-posts'); tb.innerHTML = '';
-    cfg.posts.forEach(function (p, i) {
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td>' +
-        '<td><select data-k="conn">' + [1, 2, 3, 4].map(function (n) { return '<option' + (n === p.conn ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></td>' +
-        '<td><select data-k="kw">' + POWERS.map(function (k) { return '<option value="' + k + '"' + (k === p.kw ? ' selected' : '') + '>' + fmt(k, k % 1 ? 1 : 0) + (k > 22 ? ' DC' : '') + '</option>'; }).join('') + '</select></td>' +
-        '<td><input data-k="max" type="number" min="1" step="0.1" value="' + p.max + '"></td>' +
-        '<td><button data-del>×</button></td>';
-      Array.prototype.forEach.call(tr.querySelectorAll('[data-k]'), function (el) {
-        el.onchange = function () { p[el.dataset.k] = parseFloat(el.value); save(); };
+  // ── The drawing ─────────────────────────────────────────────────────────────────────────────────────
+  var BAY = 120, PED = 60, GAP = 24, M = 30, TOP = 92, DEPTH = 210, LANE = 405, H = 520, BW = 190;
+  var geo = [], W = 1000;
+  var svg = $('park'), gBays, gHoses, gCars, gLabels, windows = [];
+
+  function lgaLabel() { var l = $('lga-txt'); if (l) l.textContent = 'LGA · ' + fmt(cfg.grid, 1) + ' kW'; }
+  function layout() {
+    var n = cfg.n, x = BW + M; geo = [];
+    for (var ci = 0; ci < n; ci++) {
+      var c = cfg.chargers[ci], g = { bays: [] };
+      if (c.hoses === 2) {
+        g.bays.push({ x: x, cx: x + BAY / 2 });
+        g.ped = { x: x + BAY, cx: x + BAY + PED / 2 };
+        g.bays.push({ x: x + BAY + PED, cx: x + BAY + PED + BAY / 2 });
+        x += 2 * BAY + PED + GAP;
+      } else {
+        g.ped = { x: x, cx: x + PED / 2 };
+        g.bays.push({ x: x + PED, cx: x + PED + BAY / 2 });
+        x += BAY + PED + GAP;
+      }
+      geo.push(g);
+    }
+    W = Math.max(800, x - GAP + M);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.innerHTML = '';
+    // Asphalt, the lane and the way in and out
+    el('rect', { x: BW, y: 30, width: W - BW, height: H - 60, fill: 'var(--asphalt)' }, svg);
+    el('rect', { x: BW, y: LANE - 70, width: W - BW, height: 140, fill: 'var(--asphalt2)' }, svg);
+    el('line', { x1: BW, x2: W, y1: LANE, y2: LANE, stroke: 'var(--paint)', 'stroke-width': 3, 'stroke-dasharray': '26 22', opacity: .7 }, svg);
+    var arrow = function (ax) { el('path', { d: 'M' + ax + ' ' + (LANE + 34) + ' h-34 m12 -10 l-12 10 l12 10', stroke: 'var(--paint)', 'stroke-width': 4, fill: 'none', opacity: .6 }, svg); };
+    arrow(W - 60); arrow(BW + 70);
+    el('text', { x: W - 14, y: LANE + 70, 'text-anchor': 'end', class: 'lbl s' }, svg).textContent = TXT.inn;
+    el('text', { x: BW + 14, y: LANE + 70, class: 'lbl s' }, svg).textContent = TXT.outt;
+    // Kerb at the top of the bays, where the cable from the main board runs to every charger
+    el('rect', { x: BW, y: 30, width: W - BW, height: TOP - 30, fill: 'var(--curb)' }, svg);
+    el('line', { x1: BW - 20, x2: geo.length ? geo[geo.length - 1].ped.cx : BW, y1: 50, y2: 50, stroke: '#334155', 'stroke-width': 6, 'stroke-linecap': 'round' }, svg);
+    el('line', { id: 'feed', x1: BW - 20, x2: geo.length ? geo[geo.length - 1].ped.cx : BW, y1: 50, y2: 50, class: 'hose flow', stroke: 'var(--chg)', 'stroke-width': 0 }, svg);
+    // The building, seen from above: flat roof, windows that light up with its load, and its main board
+    var b = el('g', {}, svg);
+    el('rect', { x: 10, y: 30, width: BW - 30, height: H - 120, rx: 6, fill: '#cbd5e1', stroke: '#64748b', 'stroke-width': 3 }, b);
+    el('rect', { x: 22, y: 42, width: BW - 54, height: H - 144, rx: 4, fill: '#94a3b8' }, b);
+    windows = [];
+    for (var r = 0; r < 6; r++) for (var k = 0; k < 3; k++) {
+      windows.push(el('rect', { x: 36 + k * 40, y: 130 + r * 34, width: 26, height: 18, rx: 2, fill: '#475569' }, b));
+    }
+    el('text', { x: 10 + (BW - 30) / 2, y: 74, 'text-anchor': 'middle', class: 'lbl' }, b).textContent = TXT.bld;
+    el('text', { x: 10 + (BW - 30) / 2, y: 100, 'text-anchor': 'middle', class: 'lbl', id: 'bld-kw' }, b).textContent = '';
+    // Main board (CGP) on the facade, where the LGA comes in from the street
+    el('rect', { x: BW - 44, y: 36, width: 30, height: 30, rx: 4, fill: '#1e293b', stroke: '#0b1220' }, b);
+    el('circle', { id: 'breaker', cx: BW - 29, cy: 51, r: 6, fill: 'var(--av)' }, b);
+    el('line', { x1: BW - 29, x2: BW - 29, y1: 0, y2: 36, stroke: '#334155', 'stroke-width': 7 }, svg);
+    el('line', { id: 'lga', x1: BW - 29, x2: BW - 29, y1: 0, y2: 36, class: 'hose flow', stroke: 'var(--wait)', 'stroke-width': 0 }, svg);
+    el('text', { x: BW - 8, y: 20, class: 'lbl s', id: 'lga-txt' }, svg);
+    lgaLabel();
+    gBays = el('g', {}, svg); gHoses = el('g', {}, svg); gCars = el('g', {}, svg); gLabels = el('g', {}, svg);
+    geo.forEach(function (g, ci) {
+      g.bays.forEach(function (bay, hi) {
+        var rr = el('rect', { x: bay.x + 4, y: TOP + 6, width: BAY - 8, height: DEPTH, fill: 'transparent', class: 'bay' }, gBays);
+        rr.addEventListener('click', function () { if (running && !bays[ci + ':' + (hi + 1)]) arrive(ci, hi + 1); });
+        el('line', { x1: bay.x, x2: bay.x, y1: TOP, y2: TOP + DEPTH + 10, stroke: 'var(--paint)', 'stroke-width': 3 }, gBays);
+        el('line', { x1: bay.x + BAY, x2: bay.x + BAY, y1: TOP, y2: TOP + DEPTH + 10, stroke: 'var(--paint)', 'stroke-width': 3 }, gBays);
+        // EV bay marking, coloured by the connector status
+        el('rect', { x: bay.x + 10, y: TOP + DEPTH - 30, width: BAY - 20, height: 26, rx: 5, fill: 'var(--off)', opacity: .9, id: 'mark-' + ci + '-' + hi }, gBays);
+        el('text', { x: bay.cx, y: TOP + DEPTH - 12, 'text-anchor': 'middle', class: 'lbl s', id: 'mtxt-' + ci + '-' + hi }, gBays);
+        el('text', { x: bay.cx, y: TOP + DEPTH + 30, 'text-anchor': 'middle', class: 'lbl', id: 'kw-' + ci + '-' + hi }, gLabels);
+        el('path', { id: 'hose-' + ci + '-' + hi, class: 'hose', d: '', stroke: 'var(--off)' }, gHoses);
       });
-      tr.querySelector('[data-del]').onclick = function () { if (cfg.posts.length > 1) { cfg.posts.splice(i, 1); save(); renderPostsEditor(); } };
-      tr.querySelector('[data-del]').disabled = running;
-      Array.prototype.forEach.call(tr.querySelectorAll('select, input'), function (el) { el.disabled = running; });
-      tb.appendChild(tr);
+      // The charger on its island, between its bays
+      var p = el('g', { class: 'pedestal' }, gBays);
+      el('rect', { x: g.ped.x + 6, y: TOP, width: PED - 12, height: 120, rx: 10, fill: 'var(--curb)' }, p);
+      el('rect', { class: 'body', x: g.ped.cx - 18, y: TOP + 14, width: 36, height: 52, rx: 7, fill: '#1e293b', stroke: '#0b1220', 'stroke-width': 2 }, p);
+      el('rect', { x: g.ped.cx - 12, y: TOP + 20, width: 24, height: 13, rx: 2, fill: '#0f172a', stroke: '#334155' }, p);
+      el('circle', { id: 'led-' + ci, cx: g.ped.cx, cy: TOP + 50, r: 7, fill: 'var(--off)' }, p);
+      el('line', { x1: g.ped.cx, x2: g.ped.cx, y1: 50, y2: TOP + 14, stroke: '#334155', 'stroke-width': 4 }, p);
+      el('text', { x: g.ped.cx, y: TOP + 90, 'text-anchor': 'middle', class: 'lbl s' }, p).textContent = cfg.chargers[ci].name;
+      el('text', { x: g.ped.cx, y: TOP + 106, 'text-anchor': 'middle', class: 'lbl s' }, p).textContent =
+        fmt(cfg.chargers[ci].kw, cfg.chargers[ci].kw % 1 ? 1 : 0) + ' kW' + (cfg.chargers[ci].kw > 22 ? ' DC' : '');
+      p.addEventListener('click', function () { openDialog(ci); });
     });
-    $('b-addpost').disabled = running || cfg.posts.length >= 10;
-  }
-  $('b-addpost').onclick = function () { var l = cfg.posts[cfg.posts.length - 1]; cfg.posts.push({ conn: l.conn, kw: l.kw, max: l.max }); save(); renderPostsEditor(); };
-
-  // ── Running site ────────────────────────────────────────────────────────────────────────────────────
-  var running = false, posts = [], building = 0, history = [], overSince = null, tripUntil = 0, dirty = true;
-  renderPostsEditor();
-
-  function applyLive() {
-    posts.forEach(function (p) { p.charger.setSocSpeed(cfg.speed); });
-    dirty = true;
+    cars.forEach(function (car) { gCars.appendChild(car.el); });
+    paint();
   }
 
+  // ── Cars ───────────────────────────────────────────────────────────────────────────────────────────
+  var cars = [], bays = {};   // bays['ci:hose'] = car
+  function carShape(color) {
+    var g = el('g', { class: 'car' });
+    el('rect', { x: -27, y: -52, width: 54, height: 104, rx: 16, fill: color, stroke: 'rgba(0,0,0,.45)', 'stroke-width': 2 }, g);
+    el('path', { d: 'M-21 -28 Q0 -40 21 -28 L19 -14 L-19 -14 Z', fill: '#0f172a', opacity: .8 }, g);   // windscreen (front, up)
+    el('rect', { x: -19, y: -10, width: 38, height: 40, rx: 6, fill: 'rgba(0,0,0,.18)' }, g);            // roof
+    el('path', { d: 'M-19 34 L19 34 L17 44 L-17 44 Z', fill: '#0f172a', opacity: .7 }, g);               // rear window
+    el('rect', { x: -14, y: 2, width: 28, height: 9, rx: 3, fill: 'rgba(15,23,42,.8)' }, g);             // battery gauge
+    el('rect', { x: -12, y: 4, width: 0, height: 5, rx: 2, fill: '#4ade80', class: 'soc' }, g);
+    return g;
+  }
+  function place(car, x, y, r, slow) {
+    car.el.setAttribute('class', 'car' + (slow ? ' turn' : ''));
+    car.el.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + r + 'deg)';
+  }
+  var nextCard = 1;
+  function arrive(ci, hose) {
+    var post = live[ci]; if (!post || !post.charger.state.connected || post.charger.state.powerOff) return;
+    var key = ci + ':' + hose; if (bays[key]) return;
+    var model = CARS[Math.floor(Math.random() * CARS.length)];
+    var car = { ci: ci, hose: hose, key: key, model: model, phase: 'in', card: 'CAR-' + (1000 + nextCard++), el: carShape(model.color),
+                dwellUntil: Date.now() + (cfg.arr > 60 ? 300000 + Math.random() * 600000 : 150000 + Math.random() * 300000) };
+    bays[key] = car; cars.push(car); gCars.appendChild(car.el);
+    car.el.addEventListener('click', function (e) { e.stopPropagation(); leave(car); });
+    var bx = geo[ci].bays[hose - 1].cx;
+    place(car, W + 90, LANE + 30, -90);
+    car.el.getBoundingClientRect();                        // the start position must be painted before moving
+    setTimeout(function () { place(car, bx, LANE + 30, -90); }, 30);
+    setTimeout(function () { place(car, bx, TOP + DEPTH - 78, 0, true); }, 2500);
+    setTimeout(function () {
+      if (car.phase !== 'in') return;
+      car.phase = 'parked';
+      var m = JSON.parse(JSON.stringify(model)); m.soc = Math.round(10 + Math.random() * 45); m.targetSoc = Math.random() < 0.4 ? 80 : 100;
+      post.charger.plugIn(hose, m);
+      setTimeout(function () { if (car.phase === 'parked') post.charger.tapCard(car.card, hose); }, 1400);
+    }, 4000);
+  }
+  function leave(car) {
+    if (car.phase === 'out') return;
+    var post = live[car.ci], c = post ? post.charger.state.connectors[car.hose - 1] : null;
+    car.phase = 'out';
+    var go = function () {
+      if (post) post.charger.unplug(car.hose);
+      var bx = geo[car.ci] ? geo[car.ci].bays[car.hose - 1].cx : W / 2;
+      place(car, bx - 40, LANE - 20, -90, true);
+      setTimeout(function () { place(car, -120, LANE - 20, -90); }, 1500);
+      setTimeout(function () { if (bays[car.key] === car) delete bays[car.key]; }, 1500);
+      setTimeout(function () { car.el.remove(); var i = cars.indexOf(car); if (i >= 0) cars.splice(i, 1); }, 4200);
+    };
+    // The driver ends the session with the same card, then unplugs and drives off
+    if (c && c.transactionId != null && post.charger.state.connected) { post.charger.tapCard(car.card, car.hose); setTimeout(go, 1600); }
+    else go();
+  }
+
+  // ── Running ─────────────────────────────────────────────────────────────────────────────────────────
+  var running = false, live = [], history = [], overSince = null, tripUntil = 0;
   function log(id, dir, frame) {
     var f = $('logf').value, quiet = $('nometer').checked;
     if (f && f !== id) return;
     var action = frame[0] === 2 ? frame[2] : '';
     if (quiet && (action === 'MeterValues' || action === 'Heartbeat' || (frame[0] === 3 && frame[2] && (frame[2].currentTime || Object.keys(frame[2]).length === 0)))) return;
-    var line = document.createElement('div');
-    line.className = dir;
+    var line = document.createElement('div'); line.className = dir;
     line.textContent = new Date().toLocaleTimeString() + '  ' + id + (dir === 'out' ? '  →  ' : '  ←  ') + JSON.stringify(frame);
     var box = $('log'); box.appendChild(line);
     while (box.childNodes.length > 500) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
-
+  function connectCharger(ci) {
+    var c = cfg.chargers[ci];
+    return { name: c.name, charger: OcppVirtualCharger(cfg.url + encodeURIComponent(c.name), {
+      connectors: c.hoses, powerKw: c.kw, chargerMaxKw: c.max, socSpeed: cfg.speed, waitForPlug: true,
+      vendor: 'ocpp-virtual-charger', model: 'Virtual site post',
+      onFrame: function (dir, fr) { log(c.name, dir, fr); }
+    }) };
+  }
   function start() {
     $('msg').textContent = '';
-    var prefix = (cfg.prefix || 'SITE').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 14) || 'SITE';
-    var go = function (base) {
-      running = true; renderPostsEditor();
-      $('b-start').hidden = true; $('b-stop').hidden = false; mode.disabled = true;
-      $('logf').innerHTML = '<option value="">' + esc(TXT.all || 'All chargers') + '</option>';
-      posts = cfg.posts.map(function (p, i) {
-        var id = prefix + '-' + (i + 1);
-        $('logf').insertAdjacentHTML('beforeend', '<option>' + esc(id) + '</option>');
-        return { id: id, cfg: p, charger: OcppVirtualCharger(base + encodeURIComponent(id), {
-          connectors: p.conn, powerKw: p.kw, chargerMaxKw: p.max, socSpeed: cfg.speed, waitForPlug: true,
-          vendor: 'ocpp-virtual-charger', model: 'Virtual site post', idTag: id + '-CARD',
-          onChange: function () { dirty = true; }, onFrame: function (dir, fr) { log(id, dir, fr); }
-        }) };
-      });
-      dirty = true;
-    };
-    if (mode.value === 'test') {
-      if (cfg.posts.length > 5) { $('msg').textContent = TXT.needTest; return; }
-      fetch('/askacharge/ocpp-test/api/nuevo', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
-        if (!d.codigo) throw new Error('no code');
-        var w = $('watch'); w.hidden = false;
-        w.href = '/askacharge/' + (ES ? 'probar-ocpp.html' : 'en/ocpp-test-server.html') + '?c=' + d.codigo + '&src=virtual-site';
-        go('wss://askacharge.com/askacharge/ocpp-test/' + d.codigo + '/');
-      }).catch(function () { $('msg').textContent = TXT.noCode; });
-    } else {
-      var u = (cfg.url || '').trim();
-      if (!/^wss?:\/\/.+\/$/.test(u)) { $('msg').textContent = TXT.noUrl; $('c-url').focus(); return; }
-      go(u);
+    if (!/^wss?:\/\/.+\/$/.test(cfg.url || '')) { $('msg').textContent = TXT.noUrl; $('c-url').focus(); return; }
+    running = true;
+    $('b-start').hidden = true; $('b-stop').hidden = false; $('c-n').disabled = true; $('c-url').disabled = true;
+    live = [];
+    $('logf').innerHTML = '<option value="">' + (TXT.all || 'All chargers') + '</option>';
+    for (var ci = 0; ci < cfg.n; ci++) {
+      live.push(connectCharger(ci));
+      var o = document.createElement('option'); o.textContent = cfg.chargers[ci].name; $('logf').appendChild(o);
     }
   }
   function stopAll() {
-    posts.forEach(function (p) { p.charger.close(); });
-    posts = []; running = false; history = []; overSince = null; tripUntil = 0;
-    $('b-start').hidden = false; $('b-stop').hidden = true; mode.disabled = !HOSTED; $('watch').hidden = true;
-    $('posts').innerHTML = ''; renderPostsEditor(); dirty = true;
+    cars.slice().forEach(function (car) { car.el.remove(); }); cars = []; bays = {};
+    live.forEach(function (p) { p.charger.close(); }); live = [];
+    running = false; history = []; overSince = null; tripUntil = 0;
+    $('b-start').hidden = false; $('b-stop').hidden = true; $('c-n').disabled = false; $('c-url').disabled = false;
+    paint();
   }
-  $('b-start').onclick = start;
-  $('b-stop').onclick = stopAll;
+  $('b-start').onclick = start; $('b-stop').onclick = stopAll;
 
-  // Building load: a slow random walk around the setting (between 60 % and 140 %)
-  var walk = 1;
-  setInterval(function () {
-    if (cfg.baseVar) walk = Math.max(0.6, Math.min(1.4, walk + (Math.random() - 0.5) * 0.12)); else walk = 1;
-  }, 5000);
+  // ── The dialog of a charger ─────────────────────────────────────────────────────────────────────────
+  var editing = null;
+  function openDialog(ci) {
+    editing = ci; var c = cfg.chargers[ci];
+    $('dlg-title').textContent = t('charger', { n: ci + 1 });
+    $('d-name').value = c.name; $('d-kw').value = String(c.kw); $('d-hoses').value = String(c.hoses); $('d-max').value = c.max;
+    $('d-name').setCustomValidity('');
+    showAddr(); $('dlg').showModal(); $('d-name').focus();
+  }
+  function showAddr() { $('d-addr').textContent = (cfg.url || 'wss://…/') + ($('d-name').value || '…'); }
+  $('d-name').addEventListener('input', function () { $('d-name').setCustomValidity(''); showAddr(); });
+  function suggestMax() {   // a sensible "whole charger" value when the power or the hoses change
+    var kw = parseFloat($('d-kw').value), h = parseInt($('d-hoses').value, 10);
+    $('d-max').value = kw > 22 ? kw : Math.max(kw, Math.min(kw * h, 22));
+  }
+  $('d-kw').onchange = suggestMax; $('d-hoses').onchange = suggestMax;
+  $('dlg-form').addEventListener('submit', function (e) {
+    if (e.submitter && e.submitter.value === 'cancel') return;
+    var name = $('d-name').value.trim();
+    if (cfg.chargers.some(function (c, i) { return i !== editing && i < cfg.n && c.name === name; })) {
+      e.preventDefault(); $('d-name').setCustomValidity(TXT.dupName); $('d-name').reportValidity(); return;
+    }
+    var c = cfg.chargers[editing], before = JSON.stringify(c);
+    c.name = name; c.kw = parseFloat($('d-kw').value); c.hoses = parseInt($('d-hoses').value, 10); c.max = parseFloat($('d-max').value) || c.kw * c.hoses;
+    save();
+    if (JSON.stringify(c) === before) return;
+    var ci = editing;
+    if (running && live[ci]) {
+      // Only this charger: its cars leave, it reconnects with the new name and power
+      cars.filter(function (car) { return car.ci === ci; }).forEach(function (car) { car.el.remove(); delete bays[car.key]; cars.splice(cars.indexOf(car), 1); });
+      live[ci].charger.close(); live[ci] = connectCharger(ci);
+      $('logf').options[ci + 1].textContent = c.name;
+    }
+    layout();
+  });
 
-  // ── Each second: totals, the main breaker, arrivals and departures, the chart ──────────────────────
+  // ── The building: a usual load that wanders, plus peaks now and then (lift, heating, kitchen) ───────
+  var walk = 1, peakKw = 0, peakUntil = 0, building = 0;
+  setInterval(function () { walk = Math.max(0.6, Math.min(1.4, walk + (Math.random() - 0.5) * 0.12)); }, 5000);
+  function buildingLoad(now) {
+    if (cfg.peaks && now > peakUntil && Math.random() < (cfg.peaks === 2 ? 1 / 25 : 1 / 70)) {
+      peakKw = Math.max(1.5, cfg.base) * (0.4 + Math.random() * 0.9); peakUntil = now + 8000 + Math.random() * 30000;
+    }
+    if (now > peakUntil) peakKw = 0;
+    return cfg.base * walk + peakKw;
+  }
+
+  // ── Every second: totals, breaker, arrivals and departures, the drawing ────────────────────────────
   setInterval(function () {
-    var nowMs = Date.now(), cut = nowMs < tripUntil;
-    building = running && !cut ? cfg.base * walk : 0;
-    var chg = posts.reduce(function (s, p) { return s + (p.charger.state.totalKw || 0); }, 0);
+    var now = Date.now(), cut = now < tripUntil;
+    building = cut ? 0 : buildingLoad(now);
+    var chg = live.reduce(function (s, p) { return s + (p.charger.state.totalKw || 0); }, 0);
     var total = building + chg;
-    // Main breaker: above the grid connection for longer than the setting → everything loses power for 30 s
     if (running && !cut && cfg.trip > 0 && total > cfg.grid) {
-      overSince = overSince || nowMs;
-      if (nowMs - overSince >= cfg.trip * 1000) {
-        tripUntil = nowMs + 30000; overSince = null;
-        posts.forEach(function (p) { p.charger.powerLoss(30); });
-      }
+      overSince = overSince || now;
+      if (now - overSince >= cfg.trip * 1000) { tripUntil = now + 30000; overSince = null; live.forEach(function (p) { p.charger.powerLoss(30); }); }
     } else overSince = null;
     if (running) {
-      history.push({ total: total, chg: chg });
-      if (history.length > 600) history.shift();
-      arrivalsAndDepartures(nowMs);
+      history.push({ total: total, chg: chg }); if (history.length > 600) history.shift();
+      traffic(now);
     }
-    paintInstallation(total, chg, cut, nowMs);
-    if (dirty) { dirty = false; paintPosts(); }
-    else if (posts.some(function (p) { return p.charger.state.totalKw > 0; })) paintPosts();
+    side(total, chg, cut, now);
+    paint(total, chg, cut);
   }, 1000);
 
-  // Cars arrive on their own: a random free connector, a random car, the card a few seconds later.
-  // They leave a little after their battery is full.
-  var nextArrival = 0;
-  function arrivalsAndDepartures(nowMs) {
-    if (cfg.arr > 0) {
-      if (!nextArrival) nextArrival = nowMs + cfg.arr * 1000 * (0.3 + Math.random());
-      if (nowMs >= nextArrival) {
-        nextArrival = nowMs + cfg.arr * 1000 * (0.3 + Math.random() * 1.4);
-        var free = [];
-        posts.forEach(function (p) { if (p.charger.state.connected) p.charger.state.connectors.forEach(function (c) { if (!c.plugged && c.available) free.push([p, c.id]); }); });
-        if (free.length) {
-          var pick = free[Math.floor(Math.random() * free.length)], keys = Object.keys(CARS);
-          plugCar(pick[0], pick[1], keys[Math.floor(Math.random() * keys.length)]);
-          setTimeout(function () { pick[0].charger.tapCard(pick[0].id + '-C' + pick[1], pick[1]); }, 2500 + Math.random() * 4000);
-        }
+  function traffic(now) {
+    if (cfg.arr > 0 && Math.random() < 1 / cfg.arr) {
+      var free = [];
+      live.forEach(function (p, ci) {
+        if (p.charger.state.connected && !p.charger.state.powerOff) p.charger.state.connectors.forEach(function (c) {
+          if (!bays[ci + ':' + c.id] && c.available) free.push([ci, c.id]);
+        });
+      });
+      if (free.length) { var f = free[Math.floor(Math.random() * free.length)]; arrive(f[0], f[1]); }
+    }
+    if (cfg.arr > 0) cars.forEach(function (car) {
+      if (car.phase !== 'parked') return;
+      var c = live[car.ci] && live[car.ci].charger.state.connectors[car.hose - 1];
+      if (c && c.status === 'SuspendedEV') { car.fullSince = car.fullSince || now; if (now - car.fullSince > 8000) leave(car); }
+      else if (now > car.dwellUntil) leave(car);
+    });
+  }
+
+  var COLORS = { Available: 'var(--av)', Charging: 'var(--chg)', Preparing: 'var(--wait)', Finishing: 'var(--wait)',
+                 SuspendedEV: 'var(--wait)', SuspendedEVSE: 'var(--wait)', Faulted: 'var(--bad)', Unavailable: 'var(--off)', Reserved: 'var(--in)' };
+  var flowW = function (kw) { return kw > 0.05 ? Math.min(12, 2 + kw / 4) : 0; };
+  function paint(total, chg, cut) {
+    // Building: its load, lit windows, the LGA and the feeder to the chargers
+    var bk = $('bld-kw'); if (bk) bk.textContent = fmt(building, 1) + ' kW' + (peakKw ? ' · ' + TXT.peak : '');
+    var lit = Math.round(windows.length * Math.min(1, building / Math.max(1, cfg.base * 1.8)));
+    windows.forEach(function (w, i) { w.setAttribute('fill', i < lit && !cut ? '#fde68a' : '#475569'); });
+    var lga = $('lga'); if (lga) lga.setAttribute('stroke-width', flowW(total || 0));
+    var feed = $('feed'); if (feed) feed.setAttribute('stroke-width', flowW(chg || 0));
+    var br = $('breaker'); if (br) br.setAttribute('fill', cut ? 'var(--bad)' : 'var(--av)');
+    geo.forEach(function (g, ci) {
+      var p = live[ci], s = p ? p.charger.state : null;
+      var led = $('led-' + ci);
+      if (led) {
+        led.setAttribute('fill', !s ? 'var(--off)' : s.powerOff || s.gaveUp ? 'var(--bad)' : !s.connected ? 'var(--off)' : s.totalKw > 0 ? 'var(--chg)' : 'var(--av)');
+        led.setAttribute('class', s && s.totalKw > 0 ? 'led-chg' : '');
       }
-    } else nextArrival = 0;
-    posts.forEach(function (p) {
-      p.charger.state.connectors.forEach(function (c) {
-        if (cfg.arr > 0 && c.plugged && c.status === 'SuspendedEV') {
-          c._fullSince = c._fullSince || nowMs;
-          if (nowMs - c._fullSince > 20000) { c._fullSince = null; p.charger.unplug(c.id); }
-        } else c._fullSince = null;
+      g.bays.forEach(function (b, hi) {
+        var c = s ? s.connectors[hi] : null, st = !s || !s.connected || s.powerOff ? null : c && c.status;
+        var mark = $('mark-' + ci + '-' + hi), mt = $('mtxt-' + ci + '-' + hi), kw = $('kw-' + ci + '-' + hi), hose = $('hose-' + ci + '-' + hi);
+        if (!mark) return;
+        mark.setAttribute('fill', st ? COLORS[st] || 'var(--off)' : 'var(--off)');
+        mt.textContent = st || (s ? (s.powerOff ? TXT.powerOff : s.gaveUp ? TXT.gaveUp : TXT.connecting) : TXT.off);
+        var car = bays[ci + ':' + (hi + 1)];
+        kw.textContent = c && c.powerKw > 0 ? fmt(c.powerKw, 1) + ' kW · ' + Math.floor(c.car ? c.car.soc : 0) + ' %'
+          : c && c.status === 'SuspendedEV' ? TXT.full + ' · ' + Math.floor(c.car ? c.car.soc : 100) + ' %'
+          : c && c.status === 'SuspendedEVSE' ? TXT.paused : c && c.awaitingPlug ? TXT.waiting : '';
+        // Hose from the charger to the car's charging port (front corner on the charger side)
+        if (c && c.plugged && car && car.phase === 'parked') {
+          var sd = b.cx < g.ped.cx ? 1 : -1, px = g.ped.cx - sd * 16, py = TOP + 58;
+          var cx = b.cx + sd * 20, cy = TOP + DEPTH - 78 - 46;
+          hose.setAttribute('d', 'M' + px + ' ' + py + ' C' + (px - sd * 10) + ' ' + (py + 50) + ',' + (cx + sd * 30) + ' ' + (cy - 10) + ',' + cx + ' ' + cy);
+          hose.setAttribute('stroke', COLORS[c.status] || 'var(--off)');
+          hose.setAttribute('class', 'hose' + (c.powerKw > 0 ? ' flow' : ''));
+        } else hose.setAttribute('d', '');
+        if (car) {
+          var bar = car.el.querySelector('.soc'), soc = c && c.car ? c.car.soc : null;
+          if (bar && soc != null) bar.setAttribute('width', String(24 * soc / 100));
+        }
       });
     });
   }
-  function plugCar(p, cid, kind) {
-    var car = JSON.parse(JSON.stringify(CARS[kind] || CARS.saloon));
-    car.kind = kind; car.soc = Math.round(10 + Math.random() * 50); car.targetSoc = Math.random() < 0.5 ? 80 : 100;
-    p.charger.plugIn(cid, car);
-  }
 
-  function paintInstallation(total, chg, cut, nowMs) {
-    $('t-grid').textContent = fmt(total, 1) + ' kW';
-    $('t-bld').textContent = fmt(building, 1) + ' kW';
-    $('t-chg').textContent = fmt(chg, 1) + ' kW';
+  function side(total, chg, cut, now) {
     $('t-total').textContent = fmt(total, 1) + ' kW';
-    $('t-of').textContent = t('of', { k: fmt(cfg.grid, 1) });
-    var w = function (kw) { return kw > 0.05 ? Math.min(14, 2 + kw / 3) : 0; };
-    $('w-grid').setAttribute('stroke-width', w(total)); $('w-bld').setAttribute('stroke-width', w(building)); $('w-chg').setAttribute('stroke-width', w(chg));
+    $('t-of').textContent = t('of', { k: fmt(cfg.grid, 1) }) + ' · ' + t('building', { k: fmt(building, 1) });
     var scale = Math.max(cfg.grid * 1.25, total, 1);
-    var g = $('gauge'); g.setAttribute('width', String(Math.min(400, 400 * total / scale)));
-    g.setAttribute('class', 'gauge' + (total > cfg.grid ? ' over' : (total > cfg.grid * 0.9 ? ' warn' : '')));
-    var lx = 400 * cfg.grid / scale; $('g-lim').setAttribute('x1', lx); $('g-lim').setAttribute('x2', lx);
-    $('breaker').setAttribute('fill', cut ? 'var(--bad)' : 'var(--av)');
+    var g = $('gauge'); g.setAttribute('width', String(Math.min(300, 300 * total / scale)));
+    g.setAttribute('class', 'gauge' + (total > cfg.grid ? ' over' : total > cfg.grid * 0.9 ? ' warn' : ''));
+    var lx = 300 * cfg.grid / scale; $('g-lim').setAttribute('x1', lx); $('g-lim').setAttribute('x2', lx);
     var st = $('t-state');
-    if (cut) { st.className = 'trip'; st.textContent = t('tripped', { s: Math.ceil((tripUntil - nowMs) / 1000) }); }
-    else if (overSince) { st.className = 'trip'; st.textContent = t('tripIn', { s: Math.max(0, Math.ceil((overSince + cfg.trip * 1000 - nowMs) / 1000)) }); }
-    else { st.className = 'small'; st.textContent = running ? (total > cfg.grid ? TXT.over || 'Above the grid connection' : TXT.ok || 'Within the grid connection') : ''; }
-    paintChart(scale);
-  }
-  function paintChart(scale) {
-    var svg = $('chart'), W = 600, H = 150, n = 600;
-    var y = function (kw) { return H - 4 - (H - 8) * Math.min(1, kw / scale); };
-    var line = function (key) {
-      return history.map(function (h, i) { return (W * (i + n - history.length) / (n - 1)).toFixed(1) + ',' + y(h[key]).toFixed(1); }).join(' ');
-    };
-    svg.innerHTML = '<rect width="600" height="150" fill="var(--soft)"/>' +
-      '<line x1="0" x2="600" y1="' + y(cfg.grid) + '" y2="' + y(cfg.grid) + '" stroke="var(--bad)" stroke-dasharray="6 5" stroke-width="1.5"/>' +
-      (history.length > 1 ? '<polyline fill="none" stroke="var(--wait)" stroke-width="2" points="' + line('chg') + '"/>' +
-                            '<polyline fill="none" stroke="var(--chg)" stroke-width="2.5" points="' + line('total') + '"/>' : '');
+    if (cut) { st.className = 'trip'; st.textContent = t('tripped', { s: Math.ceil((tripUntil - now) / 1000) }); }
+    else if (overSince) { st.className = 'trip'; st.textContent = t('tripIn', { s: Math.max(0, Math.ceil((overSince + cfg.trip * 1000 - now) / 1000)) }); }
+    else { st.className = 'small'; st.textContent = total > cfg.grid ? TXT.over || 'Above the LGA' : TXT.ok || 'Within the LGA'; }
+    // Chart: what the site draws against the LGA
+    var Wc = 300, Hc = 120, n = 600, y = function (kw) { return Hc - 3 - (Hc - 6) * Math.min(1, kw / scale); };
+    var line = function (k) { return history.map(function (h, i) { return (Wc * (i + n - history.length) / (n - 1)).toFixed(1) + ',' + y(h[k]).toFixed(1); }).join(' '); };
+    $('chart').innerHTML = '<rect width="300" height="120" fill="var(--soft)"/><line x1="0" x2="300" y1="' + y(cfg.grid) + '" y2="' + y(cfg.grid) + '" stroke="var(--bad)" stroke-dasharray="5 4"/>' +
+      (history.length > 1 ? '<polyline fill="none" stroke="var(--off)" stroke-width="1.5" points="' + line('total') + '"/><polyline fill="none" stroke="var(--chg)" stroke-width="2" points="' + line('chg') + '"/>' : '');
+    // One line per charger
+    $('list').innerHTML = cfg.chargers.slice(0, cfg.n).map(function (c, ci) {
+      var s = live[ci] ? live[ci].charger.state : null;
+      var net = !s ? TXT.off : s.powerOff ? TXT.powerOff : s.gaveUp ? TXT.gaveUp : s.offline ? TXT.offline : s.connected ? TXT.online : TXT.connecting;
+      var col = !s || !s.connected ? 'var(--off)' : s.totalKw > 0 ? 'var(--chg)' : 'var(--av)';
+      var lim = s && s.chargePointLimitKw != null ? ' · ≤' + fmt(s.chargePointLimitKw, 1) : '';
+      return '<div><span><span class="dot" style="background:' + col + '"></span>' + c.name.replace(/[<>&"]/g, '') + '</span><span>' +
+             (s ? fmt(s.totalKw, 1) + ' kW' + lim + ' · ' : '') + net + '</span></div>';
+    }).join('');
   }
 
-  function carName(car) { return car && car.kind && TXT.cars[car.kind] ? TXT.cars[car.kind] : ''; }
-  function paintPosts() {
-    var box = $('posts');
-    if (!running) { box.innerHTML = ''; return; }
-    var a = document.activeElement;
-    if (a && a.tagName === 'SELECT' && box.contains(a)) { dirty = true; return; }   // don't close a list the user has open
-    box.innerHTML = posts.map(function (p, pi) {
-      var s = p.charger.state;
-      var net = s.powerOff ? ['cut', TXT.powerOff] : (s.offline ? ['cut', TXT.offline] : (s.gaveUp ? ['cut', TXT.gaveUp] : (s.connected ? ['on', TXT.online] : ['', TXT.connecting])));
-      var head = '<h3><span>' + esc(p.id) + '</span><span class="net ' + net[0] + '">' + esc(net[1]) + '</span></h3>' +
-                 '<div class="small">' + s.connectors.length + ' × ' + fmt(p.cfg.kw, p.cfg.kw % 1 ? 1 : 0) + ' kW' + (p.cfg.kw > 22 ? ' DC' : ' AC') +
-                 ' · <strong>' + fmt(s.totalKw, 1) + '</strong> / ' + fmt(s.chargerMaxKw, 0) + ' kW</div>';
-      if (s.chargePointLimitKw != null) head += '<div class="lim">' + esc(t('postMax', { k: fmt(s.chargePointLimitKw, 1), by: s.chargePointLimitBy })) + '</div>';
-      var rows = s.connectors.map(function (c) {
-        var st = s.powerOff ? 'off' : (s.connected || s.offline ? c.status : 'off');
-        var html = '<div class="conn ' + esc(st) + '"><div class="head"><strong>' + esc(t('conn', { n: c.id })) + '</strong>' +
-                   '<span class="pill ' + esc(st) + '">' + esc(st) + '</span></div>';
-        html += '<div class="hose' + (c.powerKw > 0 ? ' on' : '') + '"></div>';
-        if (c.transactionId != null || c.powerKw > 0) {
-          html += '<div class="row" style="justify-content:space-between;margin-top:4px"><span class="kw">' + fmt(c.powerKw, 1) + ' kW</span>' +
-                  '<span class="small">' + fmt(c.currentA, 1) + ' A · ' + esc(t('session', { k: fmt(c.sessionWh / 1000, 2) })) + '</span></div>';
-        }
-        if (c.car) {
-          var soc = Math.floor(c.car.soc || 0);
-          html += '<div class="car"><span>🚗 ' + esc(carName(c.car)) + '</span><div class="soc"><i style="width:' + soc + '%"></i></div><span>' + soc + ' %' +
-                  (c.status === 'SuspendedEV' ? ' · ' + esc(TXT.full) : '') + '</span></div>';
-        }
-        if (c.awaitingPlug) html += '<div class="small">' + esc(TXT.waitCard) + '</div>';
-        if (c.limitKw != null) html += '<div class="lim">' + esc(t('limit', { k: fmt(c.limitKw, 1), by: c.limitBy })) + '</div>';
-        var b = '';
-        if (!c.plugged) {
-          b += '<select data-car="' + pi + ':' + c.id + '">' + Object.keys(CARS).map(function (k) { return '<option value="' + k + '">' + esc(TXT.cars[k]) + '</option>'; }).join('') + '</select>' +
-               '<button data-act="plug" data-p="' + pi + '" data-c="' + c.id + '">' + esc(TXT.plug) + '</button>';
-        } else {
-          b += '<button data-act="card" data-p="' + pi + '" data-c="' + c.id + '">' + esc(c.transactionId != null ? TXT.stopCard : TXT.card) + '</button>' +
-               '<button data-act="unplug" data-p="' + pi + '" data-c="' + c.id + '">' + esc(TXT.unplug) + '</button>';
-        }
-        return html + '<div class="btns">' + b + '</div></div>';
-      }).join('');
-      var foot = '<div class="btns" style="margin-top:8px"><button data-act="net" data-p="' + pi + '">' + esc(TXT.netCut) + '</button>' +
-                 '<button data-act="power" data-p="' + pi + '">' + esc(TXT.powerCut) + '</button></div>';
-      return '<div class="card post">' + head + rows + foot + '</div>';
-    }).join('');
-    // Keep the car chosen in each selector across repaints
-    Array.prototype.forEach.call(box.querySelectorAll('select[data-car]'), function (sel) {
-      if (carChoice[sel.dataset.car]) sel.value = carChoice[sel.dataset.car];
-      sel.onchange = function () { carChoice[sel.dataset.car] = sel.value; };
-    });
-  }
-  var carChoice = {};
-  $('posts').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-act]'); if (!b) return;
-    var p = posts[+b.dataset.p], cid = +b.dataset.c; if (!p) return;
-    var act = b.dataset.act;
-    if (act === 'plug') plugCar(p, cid, carChoice[b.dataset.p + ':' + cid] || 'small');
-    else if (act === 'unplug') p.charger.unplug(cid);
-    else if (act === 'card') p.charger.tapCard(p.id + '-C' + cid, cid);
-    else if (act === 'net') p.charger.outage(20);
-    else if (act === 'power') p.charger.powerLoss(30);
-    dirty = true;
-  });
   $('logf').onchange = function () { $('log').textContent = ''; };
+  layout();
 })();

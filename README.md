@@ -38,11 +38,12 @@ It behaves like a real charger on the wire:
 
 ## A charging site
 
-`site.html` puts several chargers behind one grid connection, for testing load balancing. Everything is a setting on
-the page: grid connection (kW), building load (fixed or varying), the main breaker tripping if the site goes over it
-for 10, 30 or 60 s, the posts (how many, connectors each, kW each, post maximum), how fast the batteries fill, and cars
-arriving on their own. It draws the power flowing from the grid to the building and the chargers, a 10-minute chart
-against the grid limit, and every connector with its car, its power and the profile limiting it.
+`site.html` is a car park seen from above, with a small building next to it and one grid connection (LGA) for both,
+for testing load balancing. Click a charger to give it a name (added to a generic OCPP address) and a power; cars drive
+in, plug in, tap their card, charge and leave when full or after a while. Settings on the page: LGA power (3×25 A to
+3×250 A), building load with random peaks, the main breaker tripping if the site goes over the LGA for 10, 30 or 60 s,
+how many chargers (1 to 6, one or two hoses), how fast the batteries fill and how often cars arrive. It shows the load
+against the LGA, a 10-minute chart, and each bay with its status, power, state of charge and the profile limiting it.
 
 From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
 a table every few seconds:
