@@ -11,7 +11,7 @@
     title: 'Simulador de instalación de carga OCPP',
     lead: 'Varios cargadores detrás de una sola acometida, coches que se llenan y perfiles de carga OCPP que limitan la potencia de verdad. Para probar el reparto de carga de una plataforma.',
     setup: 'Instalación', gridKw: 'Potencia de la acometida (kW)', baseKw: 'Consumo del edificio (kW)', baseVar: 'El consumo del edificio varía',
-    tripLbl: 'Salta el general si se supera durante', never: 'Nunca', speed: 'Las baterías se llenan', real: 'a velocidad real',
+    tripLbl: 'Salta el general si se supera durante', never: 'Nunca', speed: 'Las baterías se llenan', speedNote: 'Solo las baterías: el contador cuenta la energía real.', real: 'a velocidad real',
     arrivals: 'Llegan coches solos', arr60: '≈ cada minuto', arr300: '≈ cada 5 minutos', no: 'No', yes: 'Sí',
     posts: 'Puestos de carga', thConn: 'Mangueras', thKw: 'kW cada una', thMax: 'Máx. del puesto (kW)', addPost: '+ Añadir puesto',
     target: 'Dónde se conectan los cargadores', modeTest: 'Servidor de pruebas OCPP de askacharge.com (gratis, sin cuenta)', modeOwn: 'Mi CSMS',
