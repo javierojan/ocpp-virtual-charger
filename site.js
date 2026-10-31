@@ -25,7 +25,7 @@
     promoT: '¿Tienes una instalación de verdad?', promoB: 'Prueba 30 días gratis',
     promoP: 'askacharge.com reparte la potencia de una instalación entre sus cargadores con OCPP estándar, con tus tarifas y tus cobros, y sin atarte a ningún fabricante. Pruébalo 30 días gratis, sin tarjeta.',
     simple: 'Un simulador, dicho claro: el OCPP es de verdad; la física está simplificada (curvas de carga de los coches, consumo del edificio). Solo se aceleran las baterías: el contador cuenta siempre la energía real.',
-    single: 'Un solo cargador', madeby: 'Hecho por',
+    single: 'Un solo cargador', madeby: 'Hecho por', video: '▶ Míralo en dos minutos: coches, balanceo de carga y el general saltando',
     nameLbl: 'Nombre (identidad OCPP)', kwLbl: 'Potencia por manguera', hosesLbl: 'Mangueras', maxLbl: 'El cargador entero, como mucho (kW)',
     dlgNote: 'Si la instalación está encendida, solo se reconecta este cargador.', cancel: 'Cancelar', save: 'Guardar',
     charger: 'Cargador {n}', of: 'de {k} kW', over: 'Por encima de la LGA', ok: 'Dentro de la LGA',
@@ -51,6 +51,7 @@
     document.documentElement.lang = 'es';
     document.title = 'Simulador de instalación de carga OCPP — un parking visto desde arriba';
     Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (e) { if (TXT[e.dataset.t]) e.textContent = TXT[e.dataset.t]; });
+    $('video').href = 'https://youtu.be/YfNWk6Fw51U';
   }
   function fmt(n, d) { return Number(n || 0).toLocaleString(ES ? 'es-ES' : 'en-GB', { minimumFractionDigits: d, maximumFractionDigits: d }); }
   function el(tag, attrs, parent) {

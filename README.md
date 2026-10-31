@@ -5,7 +5,7 @@ Point it at any central system (CSMS), start and stop sessions, and watch every 
 Or put **a whole charging site** behind one grid connection and see whether your CSMS shares the power well.
 
 **▶ One charger: https://askacharge.com/askacharge/virtual-charger/**
-**▶ A charging site: https://askacharge.com/askacharge/virtual-charger/site.html**
+**▶ A charging site: https://askacharge.com/askacharge/virtual-charger/site.html** · [video, 2 min](https://youtu.be/_y8upeAv78g)
 
 It behaves like a real charger on the wire:
 
