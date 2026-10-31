@@ -32,13 +32,19 @@
     tripped: '⚡ Ha saltado el general: sin luz {s} s', tripIn: 'Salta el general en {s} s', building: 'edificio {k} kW',
     noUrl: 'Escribe la dirección genérica, acabada en /.', noCode: 'No se ha podido pedir un código al servidor de pruebas.',
     dupName: 'Ya hay un cargador con ese nombre.', online: 'conectado', offline: 'sin red', powerOff: 'sin luz', gaveUp: 'rechazado', connecting: 'conectando…', off: 'apagado',
-    full: 'lleno', waiting: 'esperando tarjeta', paused: 'en pausa', bld: 'EDIFICIO', peak: 'pico', inn: 'ENTRADA →', outt: '← SALIDA'
+    full: 'lleno', waiting: 'esperando tarjeta', paused: 'en pausa', bld: 'EDIFICIO', peak: 'pico', inn: 'ENTRADA →', outt: '← SALIDA',
+    gridKw: 'LGA (acometida)', lgaTitle: 'LGA y cuadro general', phLbl: 'Suministro', tri: 'Trifásico 400 V', mono: 'Monofásico 230 V',
+    ampLbl: 'Fusible general (A)', lgaKw: 'Potencia de la LGA: {k} kW', no: 'No', yes: 'Sí',
+    sbLbl: 'Sistema de balanceo local (SB)', sbMarginLbl: 'Margen de seguridad del SB (%)',
+    sbHelp: 'Un balanceador local mide la LGA y limita él mismo los cargadores, sin OCPP: lo que deja libre el edificio, menos el margen. Da a cada coche al menos su mínimo (6 A) por orden de llegada mientras quepa, y el resto a partes iguales; los que no caben esperan. Los perfiles de carga OCPP de la plataforma siguen aplicándose encima: manda el límite más bajo.',
+    sbCap: 'SB ≤{k}'
   } : {
     charger: 'Charger {n}', of: 'of {k} kW', over: 'Above the LGA', ok: 'Within the LGA',
     tripped: '⚡ The main breaker tripped: no power for {s} s', tripIn: 'Main breaker trips in {s} s', building: 'building {k} kW',
     noUrl: 'Type the generic address, ending in /.', noCode: 'Could not get a code from the test server.',
     dupName: 'There is already a charger with that name.', online: 'online', offline: 'offline', powerOff: 'no power', gaveUp: 'rejected', connecting: 'connecting…', off: 'off',
-    full: 'full', waiting: 'waiting for a card', paused: 'paused', all: 'All chargers', bld: 'BUILDING', peak: 'peak', inn: 'IN →', outt: '← OUT'
+    full: 'full', waiting: 'waiting for a card', paused: 'paused', all: 'All chargers', bld: 'BUILDING', peak: 'peak', inn: 'IN →', outt: '← OUT',
+    lgaKw: 'LGA power: {k} kW', sbCap: 'SB ≤{k}'
   };
   function t(k, v) { var s = TXT[k] || k; Object.keys(v || {}).forEach(function (x) { s = s.replace('{' + x + '}', v[x]); }); return s; }
   if (ES) {
@@ -65,7 +71,7 @@
   ];
 
   // ── Settings ────────────────────────────────────────────────────────────────────────────────────────
-  var DEFAULT = { url: '', grid: 43.6, arr: 40, speed: 1, base: 6, peaks: 1, trip: 0, n: 4, chargers: [] };
+  var DEFAULT = { url: '', grid: 43.6, phases: 3, amps: 63, arr: 40, speed: 1, base: 6, peaks: 1, trip: 0, sb: 0, sbMargin: 10, n: 4, chargers: [] };
   for (var i = 0; i < 6; i++) DEFAULT.chargers.push({ name: 'SITE-' + (i + 1), kw: i < 2 ? 11 : 22, hoses: 2, max: 22 });
   var cfg;
   try { cfg = JSON.parse(localStorage.getItem('ovc-parking') || 'null'); } catch (e) {}
@@ -77,8 +83,30 @@
     if (e.tagName === 'SELECT' && e.value !== String(cfg[key])) { cfg[key] = num ? parseFloat(e.options[0].value) : e.options[0].value; e.value = String(cfg[key]); }
     e.onchange = function () { cfg[key] = num ? parseFloat(e.value) || 0 : e.value.trim(); save(); if (after) after(); };
   }
-  bind('c-url', 'url'); bind('c-grid', 'grid', true, function () { lgaLabel(); }); bind('c-arr', 'arr', true);
-  bind('c-base', 'base', true); bind('c-peaks', 'peaks', true); bind('c-trip', 'trip', true);
+  bind('c-url', 'url'); bind('c-arr', 'arr', true);
+  // LGA power from its supply and main fuse: three-phase √3 × 400 V × A, single-phase 230 V × A
+  function lgaKw(ph, a) { return Math.round((ph === 3 ? Math.sqrt(3) * 400 * a : 230 * a) / 100) / 10; }
+  cfg.grid = lgaKw(cfg.phases, cfg.amps);
+  function lgaButton() {
+    $('b-lga').textContent = (cfg.phases === 3 ? '3×' : '1×') + cfg.amps + ' A · ' + fmt(cfg.grid, 1) + ' kW' + (cfg.sb ? ' · SB' : '');
+    lgaLabel();
+  }
+  function openLga() {
+    $('l-ph').value = String(cfg.phases); $('l-amps').value = String(cfg.amps); $('l-base').value = cfg.base;
+    $('l-peaks').value = String(cfg.peaks); $('l-trip').value = String(cfg.trip); $('l-sb').value = String(cfg.sb); $('l-margin').value = cfg.sbMargin;
+    lgaPreview(); $('dlg-lga').showModal();
+  }
+  function lgaPreview() { $('l-kw').textContent = t('lgaKw', { k: fmt(lgaKw(parseInt($('l-ph').value, 10), parseInt($('l-amps').value, 10)), 1) }); }
+  $('l-ph').onchange = lgaPreview; $('l-amps').onchange = lgaPreview;
+  $('b-lga').onclick = openLga;
+  $('lga-form').addEventListener('submit', function (e) {
+    if (e.submitter && e.submitter.value === 'cancel') return;
+    cfg.phases = parseInt($('l-ph').value, 10); cfg.amps = parseInt($('l-amps').value, 10); cfg.grid = lgaKw(cfg.phases, cfg.amps);
+    cfg.base = parseFloat($('l-base').value) || 0; cfg.peaks = parseInt($('l-peaks').value, 10); cfg.trip = parseInt($('l-trip').value, 10);
+    cfg.sb = parseInt($('l-sb').value, 10); cfg.sbMargin = Math.max(0, Math.min(50, parseFloat($('l-margin').value) || 0));
+    if (!cfg.sb) live.forEach(function (p, ci) { p.sbKw = null; p.charger.setChargerMax(cfg.chargers[ci].max); });
+    save(); lgaButton(); paint();
+  });
   bind('c-speed', 'speed', true, function () { live.forEach(function (c) { if (c) c.charger.setSocSpeed(cfg.speed); }); });
   bind('c-n', 'n', true, function () { if (!running) layout(); });
   $('b-test').hidden = !HOSTED;
@@ -97,7 +125,7 @@
   var geo = [], W = 1000;
   var svg = $('park'), gBays, gHoses, gCars, gLabels, windows = [];
 
-  function lgaLabel() { var l = $('lga-txt'); if (l) l.textContent = 'LGA · ' + fmt(cfg.grid, 1) + ' kW'; }
+  function lgaLabel() { var l = $('lga-txt'); if (l) l.textContent = 'LGA ' + (cfg.phases === 3 ? '3×' : '1×') + cfg.amps + ' A · ' + fmt(cfg.grid, 1) + ' kW'; }
   function layout() {
     var n = cfg.n, x = BW + M; geo = [];
     for (var ci = 0; ci < n; ci++) {
@@ -140,8 +168,14 @@
     el('text', { x: 10 + (BW - 30) / 2, y: 74, 'text-anchor': 'middle', class: 'lbl' }, b).textContent = TXT.bld;
     el('text', { x: 10 + (BW - 30) / 2, y: 100, 'text-anchor': 'middle', class: 'lbl', id: 'bld-kw' }, b).textContent = '';
     // Main board (CGP) on the facade, where the LGA comes in from the street
-    el('rect', { x: BW - 44, y: 36, width: 30, height: 30, rx: 4, fill: '#1e293b', stroke: '#0b1220' }, b);
-    el('circle', { id: 'breaker', cx: BW - 29, cy: 51, r: 6, fill: 'var(--av)' }, b);
+    var cgp = el('g', { class: 'pedestal' }, svg);
+    el('rect', { class: 'body', x: BW - 44, y: 36, width: 30, height: 30, rx: 4, fill: '#1e293b', stroke: '#0b1220' }, cgp);
+    el('circle', { id: 'breaker', cx: BW - 29, cy: 51, r: 6, fill: 'var(--av)' }, cgp);
+    // Local load balancer next to the main board, when there is one
+    var sbx = el('g', { id: 'sb-box' }, cgp);
+    el('rect', { x: BW - 78, y: 36, width: 30, height: 30, rx: 4, fill: '#7c3aed', stroke: '#0b1220' }, sbx);
+    el('text', { x: BW - 63, y: 56, 'text-anchor': 'middle', class: 'lbl s' }, sbx).textContent = 'SB';
+    cgp.addEventListener('click', openLga);
     el('line', { x1: BW - 29, x2: BW - 29, y1: 0, y2: 36, stroke: '#334155', 'stroke-width': 7 }, svg);
     el('line', { id: 'lga', x1: BW - 29, x2: BW - 29, y1: 0, y2: 36, class: 'hose flow', stroke: 'var(--wait)', 'stroke-width': 0 }, svg);
     el('text', { x: BW - 8, y: 20, class: 'lbl s', id: 'lga-txt' }, svg);
@@ -323,6 +357,7 @@
   setInterval(function () {
     var now = Date.now(), cut = now < tripUntil;
     building = cut ? 0 : buildingLoad(now);
+    if (cfg.sb && running) localBalancer();
     var chg = live.reduce(function (s, p) { return s + (p.charger.state.totalKw || 0); }, 0);
     var total = building + chg;
     if (running && !cut && cfg.trip > 0 && total > cfg.grid) {
@@ -336,6 +371,38 @@
     side(total, chg, cut, now);
     paint(total, chg, cut);
   }, 1000);
+
+  // The local balancer (SB): measures the LGA and caps every charger itself, outside OCPP. Like a good one, it gives each
+  // charging hose at least its minimum (6 A per phase) in order of arrival while what the building leaves free (minus
+  // the margin) allows it, and shares the rest equally; the hoses that don't fit wait. Never everyone below the minimum.
+  function localBalancer() {
+    var free = Math.max(0, cfg.grid * (1 - cfg.sbMargin / 100) - building), hoses = [];
+    live.forEach(function (p, ci) {
+      var kw = cfg.chargers[ci].kw, sup = kw > 22 ? 0 : (kw > 7.4 ? 3 : 1);
+      p.charger.state.connectors.forEach(function (c) {
+        if (c.transactionId == null) return;
+        var ph = sup && c.car && c.car.phases ? Math.min(sup, c.car.phases) : sup;
+        var want = Math.min(kw, c.car ? (sup ? c.car.maxAcKw || kw : c.car.maxDcKw || kw) : kw);
+        if (c.status === 'SuspendedEV') want = 0;
+        hoses.push({ ci: ci, since: c.txStartedAt || 0, min: ph ? 6 * 230 * ph / 1000 : 1, want: want, got: 0 });
+      });
+    });
+    hoses.sort(function (a, b) { return a.since - b.since; });
+    var served = [];
+    hoses.forEach(function (h) { if (h.want > 0 && free >= h.min) { h.got = h.min; free -= h.min; served.push(h); } });
+    while (served.length && free > 0.01) {
+      var share = free / served.length, still = [];
+      served.forEach(function (h) { var g = Math.min(share, h.want - h.got); h.got += g; free -= g; if (h.want - h.got > 0.01) still.push(h); });
+      if (still.length === served.length) break;
+      served = still;
+    }
+    live.forEach(function (p, ci) {
+      var mine = hoses.filter(function (h) { return h.ci === ci; });
+      var cap = mine.length ? mine.reduce(function (s, h) { return s + h.got; }, 0) : Math.min(cfg.chargers[ci].max, free);
+      cap = Math.round(Math.min(cfg.chargers[ci].max, cap) * 10) / 10;
+      if (p.sbKw !== cap) { p.sbKw = cap; p.charger.setChargerMax(cap || 0.01); }
+    });
+  }
 
   function traffic(now) {
     if (cfg.arr > 0 && Math.random() < 1 / cfg.arr) {
@@ -366,6 +433,7 @@
     var lga = $('lga'); if (lga) lga.setAttribute('stroke-width', flowW(total || 0));
     var feed = $('feed'); if (feed) feed.setAttribute('stroke-width', flowW(chg || 0));
     var br = $('breaker'); if (br) br.setAttribute('fill', cut ? 'var(--bad)' : 'var(--av)');
+    var sb = $('sb-box'); if (sb) sb.style.display = cfg.sb ? '' : 'none';
     geo.forEach(function (g, ci) {
       var p = live[ci], s = p ? p.charger.state : null;
       var led = $('led-' + ci);
@@ -420,12 +488,14 @@
       var s = live[ci] ? live[ci].charger.state : null;
       var net = !s ? TXT.off : s.powerOff ? TXT.powerOff : s.gaveUp ? TXT.gaveUp : s.offline ? TXT.offline : s.connected ? TXT.online : TXT.connecting;
       var col = !s || !s.connected ? 'var(--off)' : s.totalKw > 0 ? 'var(--chg)' : 'var(--av)';
-      var lim = s && s.chargePointLimitKw != null ? ' · ≤' + fmt(s.chargePointLimitKw, 1) : '';
+      var lim = (s && s.chargePointLimitKw != null ? ' · ≤' + fmt(s.chargePointLimitKw, 1) : '') +
+                (cfg.sb && live[ci] && live[ci].sbKw != null ? ' · ' + t('sbCap', { k: fmt(live[ci].sbKw, 1) }) : '');
       return '<div><span><span class="dot" style="background:' + col + '"></span>' + c.name.replace(/[<>&"]/g, '') + '</span><span>' +
              (s ? fmt(s.totalKw, 1) + ' kW' + lim + ' · ' : '') + net + '</span></div>';
     }).join('');
   }
 
   $('logf').onchange = function () { $('log').textContent = ''; };
+  lgaButton();
   layout();
 })();

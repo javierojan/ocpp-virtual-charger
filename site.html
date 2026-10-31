@@ -74,7 +74,7 @@
   <div class="card bar">
     <div class="wide"><label data-t="addrLbl">Generic address (each charger's name is added at the end)</label>
       <input id="c-url" class="mono" placeholder="wss://your-csms.example/ocpp/your-brand/" /></div>
-    <div><label data-t="gridKw">LGA power (grid connection)</label><select id="c-grid"><option value="17.3">3×25 A · 17.3 kW</option><option value="22.2">3×32 A · 22.2 kW</option><option value="27.7">3×40 A · 27.7 kW</option><option value="34.6">3×50 A · 34.6 kW</option><option value="43.6">3×63 A · 43.6 kW</option><option value="55.4">3×80 A · 55.4 kW</option><option value="69.3">3×100 A · 69.3 kW</option><option value="86.6">3×125 A · 86.6 kW</option><option value="110.9">3×160 A · 110.9 kW</option><option value="138.6">3×200 A · 138.6 kW</option><option value="173.2">3×250 A · 173.2 kW</option></select></div>
+    <div><label data-t="gridKw">LGA (grid connection)</label><button id="b-lga" type="button" style="width:100%;text-align:left"></button></div>
     <div><label data-t="arrivals">Cars arrive</label>
       <select id="c-arr"><option value="0" data-t="arrNo">only when I send them</option><option value="40" data-t="arrBusy">often</option><option value="120" data-t="arrCalm">now and then</option></select></div>
     <div><label data-t="speed">Batteries fill</label>
@@ -100,11 +100,6 @@
       <div class="small"><span style="color:var(--chg)">■</span> <span data-t="lgChg">chargers</span> · <span style="color:var(--off)">■</span> <span data-t="lgTot">with the building</span> · <span style="color:var(--bad)">┄</span> <span data-t="lgLim">grid connection</span> · <span data-t="lgWin">10 min</span></div>
       <div class="list" id="list"></div>
       <details><summary data-t="more">More settings</summary>
-        <div style="margin-top:8px"><label data-t="baseKw">Building: usual load (kW)</label><input id="c-base" type="number" min="0" step="0.1" /></div>
-        <div style="margin-top:8px"><label data-t="peaksLbl">Building: load peaks (lift, heating, kitchen)</label>
-          <select id="c-peaks"><option value="0" data-t="never">Never</option><option value="1" data-t="peaksSome">now and then</option><option value="2" data-t="peaksMany">often</option></select></div>
-        <div style="margin-top:8px"><label data-t="tripLbl">Main breaker trips if exceeded for</label>
-          <select id="c-trip"><option value="0" data-t="never">Never</option><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option></select></div>
         <div style="margin-top:8px"><label data-t="nChg">Chargers in the car park</label>
           <select id="c-n"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
       </details>
@@ -144,6 +139,30 @@
       <div class="full"><label data-t="maxLbl">Whole charger at most (kW)</label><input id="d-max" type="number" min="1" step="0.1" /></div>
     </div>
     <div class="small" data-t="dlgNote">Changing it while the site is on reconnects only this charger.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button value="cancel" formnovalidate data-t="cancel">Cancel</button><button value="ok" class="primary" data-t="save">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-lga">
+  <form method="dialog" id="lga-form">
+    <h2 data-t="lgaTitle">LGA and main board</h2>
+    <div class="f">
+      <div><label data-t="phLbl">Supply</label>
+        <select id="l-ph"><option value="3" data-t="tri">Three-phase 400 V</option><option value="1" data-t="mono">Single-phase 230 V</option></select></div>
+      <div><label data-t="ampLbl">Main fuse (A)</label>
+        <select id="l-amps"><option>25</option><option>32</option><option>40</option><option>50</option><option>63</option><option>80</option><option>100</option><option>125</option><option>160</option><option>200</option><option>250</option></select></div>
+      <div class="full"><div class="addr" id="l-kw"></div></div>
+      <div><label data-t="baseKw">Building: usual load (kW)</label><input id="l-base" type="number" min="0" step="0.1" /></div>
+      <div><label data-t="peaksLbl">Building: load peaks</label>
+        <select id="l-peaks"><option value="0" data-t="never">Never</option><option value="1" data-t="peaksSome">now and then</option><option value="2" data-t="peaksMany">often</option></select></div>
+      <div class="full"><label data-t="tripLbl">Main breaker trips if exceeded for</label>
+        <select id="l-trip"><option value="0" data-t="never">Never</option><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option></select></div>
+      <div><label data-t="sbLbl">Local load balancer (SB)</label>
+        <select id="l-sb"><option value="0" data-t="no">No</option><option value="1" data-t="yes">Yes</option></select></div>
+      <div><label data-t="sbMarginLbl">SB safety margin (%)</label><input id="l-margin" type="number" min="0" max="50" step="1" /></div>
+      <div class="full small" data-t="sbHelp">A local balancer measures the LGA and caps the chargers itself, without OCPP: what the building leaves free, minus the margin. Each car gets at least its minimum (6 A) in order of arrival while it fits, the rest is shared equally; the ones that don't fit wait. The CSMS's Smart Charging profiles still apply on top: the lower limit wins.</div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button value="cancel" formnovalidate data-t="cancel">Cancel</button><button value="ok" class="primary" data-t="save">Save</button></div>
   </form>

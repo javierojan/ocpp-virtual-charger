@@ -44,6 +44,9 @@ in, plug in, tap their card, charge and leave when full or after a while. Settin
 3×250 A), building load with random peaks, the main breaker tripping if the site goes over the LGA for 10, 30 or 60 s,
 how many chargers (1 to 6, one or two hoses), how fast the batteries fill and how often cars arrive. It shows the load
 against the LGA, a 10-minute chart, and each bay with its status, power, state of charge and the profile limiting it.
+The LGA (single or three-phase, main fuse) is set in its own dialog, with the building load and, optionally, a **local load
+balancer (SB)** that caps the chargers itself outside OCPP, the way a site device does: minimum first in order of arrival,
+the rest shared. The CSMS's profiles still apply on top, so you can test a CSMS with and without a balancer underneath.
 
 From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
 a table every few seconds:
