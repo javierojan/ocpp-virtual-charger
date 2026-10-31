@@ -1,0 +1,23 @@
+{
+  "url": "wss://your-csms.example/ocpp/",
+  "gridKw": 30,
+  "buildingKw": 6,
+  "socSpeed": 60,
+  "printEverySec": 5,
+  "runForSec": 0,
+  "verbose": false,
+  "posts": [
+    { "id": "SITE-1", "key": "", "connectors": 2, "powerKw": 11, "chargerMaxKw": 22 },
+    { "id": "SITE-2", "key": "", "connectors": 2, "powerKw": 11, "chargerMaxKw": 22 },
+    { "id": "SITE-3", "key": "", "connectors": 2, "powerKw": 22, "chargerMaxKw": 22 },
+    { "id": "SITE-4", "key": "", "connectors": 2, "powerKw": 22, "chargerMaxKw": 44 }
+  ],
+  "cars": [
+    { "post": 1, "connector": 1, "car": "saloon", "soc": 25, "at": 3 },
+    { "post": 1, "connector": 2, "car": "small", "soc": 50, "at": 8 },
+    { "post": 2, "connector": 1, "car": "van", "soc": 15, "at": 12 },
+    { "post": 3, "connector": 1, "car": "suv", "soc": 40, "at": 16 },
+    { "post": 4, "connector": 1, "car": "saloon", "soc": 60, "at": 20 },
+    { "post": 4, "connector": 2, "car": "phev", "soc": 10, "at": 24 }
+  ]
+}

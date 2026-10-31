@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OCPP charging site simulator — several chargers, one grid connection</title>
+  <meta name="description" content="A charging site in your browser: several OCPP 1.6J chargers with one or more connectors behind one grid connection, cars that fill up, and Smart Charging profiles that really limit the power. For testing load balancing in a CSMS." />
+  <style>
+    :root { --bg:#eef2f7; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --acc:#16a34a; --out:#1d4ed8; --in:#7c3aed;
+            --av:#16a34a; --chg:#2563eb; --wait:#d97706; --bad:#dc2626; --off:#94a3b8; --soft:#f8fafc; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0b1220; --card:#111a2e; --ink:#e2e8f0; --muted:#94a3b8; --line:#1e293b; --acc:#22c55e;
+            --out:#60a5fa; --in:#c084fc; --av:#22c55e; --chg:#60a5fa; --wait:#fbbf24; --bad:#f87171; --off:#64748b; --soft:#0f172a; } }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+    main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 1.45rem; margin: 0 0 2px; } .lead { color: var(--muted); margin: 0 0 16px; }
+    h2 { font-size: 1rem; margin: 0 0 10px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .top { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .top { grid-template-columns: 1fr; } }
+    button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer; font-size: .88rem; }
+    button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+    button.danger { color: var(--bad); }
+    button:disabled { opacity: .4; cursor: default; }
+    label { display:block; font-weight:600; font-size:.82rem; color: var(--muted); margin: 0 0 3px; }
+    input, select { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:8px; font: 13px system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+    input.mono { font: 12.5px ui-monospace,monospace; }
+    .f { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .small { color: var(--muted); font-size: .8rem; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    table.posts { width:100%; border-collapse: collapse; font-size: .85rem; }
+    table.posts td, table.posts th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align:left; }
+    table.posts input, table.posts select { padding: 5px 6px; }
+    /* Installation diagram */
+    svg.flow { width:100%; height:auto; display:block; }
+    .wire { fill:none; stroke: var(--line); stroke-width: 6; stroke-linecap: round; }
+    .live { fill:none; stroke: var(--chg); stroke-linecap: round; stroke-dasharray: 3 12; animation: run 1s linear infinite; }
+    .live.solarw { stroke: #f59e0b; }
+    @keyframes run { to { stroke-dashoffset: -15; } }
+    .gauge-bg { fill: var(--line); } .gauge { fill: var(--av); transition: width .5s, fill .3s; }
+    .gauge.warn { fill: var(--wait); } .gauge.over { fill: var(--bad); }
+    .big { font-weight: 800; font-size: 1.35rem; }
+    /* Posts */
+    .posts-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+    .post { position: relative; }
+    .post h3 { margin: 0 0 2px; font-size: .98rem; display:flex; justify-content:space-between; gap: 8px; }
+    .post .net { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--muted); }
+    .net.on { color: var(--av); } .net.cut { color: var(--bad); }
+    .conn { border:1px solid var(--line); border-left: 6px solid var(--off); border-radius: 10px; padding: 8px 10px; margin-top: 8px; background: var(--soft); }
+    .conn.Available { border-left-color: var(--av); } .conn.Charging { border-left-color: var(--chg); }
+    .conn.Preparing, .conn.Finishing, .conn.SuspendedEV, .conn.SuspendedEVSE { border-left-color: var(--wait); }
+    .conn.Faulted { border-left-color: var(--bad); } .conn.Unavailable { border-left-color: var(--off); }
+    .conn .head { display:flex; justify-content:space-between; align-items:baseline; gap:6px; }
+    .pill { font-size: .72rem; font-weight: 800; padding: 1px 8px; border-radius: 99px; color: #fff; background: var(--off); white-space: nowrap; }
+    .pill.Available { background: var(--av); } .pill.Charging { background: var(--chg); }
+    .pill.Preparing, .pill.Finishing, .pill.SuspendedEV, .pill.SuspendedEVSE { background: var(--wait); }
+    .pill.Faulted { background: var(--bad); }
+    .kw { font-weight: 800; font-size: 1.2rem; }
+    .car { display:flex; align-items:center; gap: 8px; margin-top: 4px; font-size: .8rem; color: var(--muted); }
+    .soc { flex: 1; height: 9px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .soc > i { display:block; height: 100%; background: var(--av); transition: width .8s; }
+    .lim { font-size: .76rem; color: var(--wait); margin-top: 3px; }
+    .btns { display:flex; flex-wrap:wrap; gap:5px; margin-top: 6px; }
+    .btns button, .btns select { padding: 4px 8px; font-size: .78rem; border-radius: 8px; width:auto; }
+    .hose { height: 6px; border-radius: 4px; background: var(--line); margin: 6px 0 0; position: relative; overflow: hidden; }
+    .hose.on::after { content:''; position:absolute; inset:0; background: repeating-linear-gradient(90deg, var(--chg) 0 6px, transparent 6px 16px); animation: hose 1s linear infinite; }
+    @keyframes hose { from { background-position: 0 0; } to { background-position: 16px 0; } }
+    #chart { width:100%; height: 150px; display:block; }
+    #log { font: 12px/1.45 ui-monospace,monospace; max-height: 320px; overflow:auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+    .out { color: var(--out); } .in { color: var(--in); }
+    details > summary { cursor: pointer; font-weight: 700; }
+    .promo { margin-top: 16px; padding: 14px; border-radius: 12px; background: linear-gradient(135deg, #0f3460, #16a34a); color: #fff; }
+    .promo h3 { margin: 0 0 4px; font-size: 1.02rem; } .promo p { margin: 0 0 10px; font-size: .88rem; opacity: .95; }
+    .promo a { display:inline-block; background:#fff; color:#0f3460; font-weight:800; padding:8px 14px; border-radius:9px; text-decoration:none; }
+    footer { color: var(--muted); font-size: .85rem; margin-top: 20px; } a { color: var(--acc); }
+    .trip { color: var(--bad); font-weight: 800; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 data-t="title">OCPP charging site simulator</h1>
+  <p class="lead" data-t="lead">Several chargers behind one grid connection, cars that fill up and Smart Charging profiles that really limit the power. Built to test load balancing in a CSMS.</p>
+
+  <div class="top">
+    <!-- Settings -->
+    <div class="card">
+      <h2 data-t="setup">Site</h2>
+      <div class="f">
+        <div><label data-t="gridKw">Grid connection (kW)</label><input id="c-grid" type="number" min="1" step="0.1" /></div>
+        <div><label data-t="baseKw">Building load (kW)</label><input id="c-base" type="number" min="0" step="0.1" /></div>
+        <div><label data-t="baseVar">Building load varies</label>
+          <select id="c-basevar"><option value="0" data-t="no">No</option><option value="1" data-t="yes">Yes</option></select></div>
+        <div><label data-t="tripLbl">Main breaker trips if exceeded for</label>
+          <select id="c-trip"><option value="0" data-t="never">Never</option><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option></select></div>
+        <div><label data-t="speed">Car batteries fill</label>
+          <select id="c-speed"><option value="1" data-t="real">at real speed</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option></select></div>
+        <div><label data-t="arrivals">Cars arrive on their own</label>
+          <select id="c-arr"><option value="0" data-t="no">No</option><option value="60" data-t="arr60">≈ every minute</option><option value="300" data-t="arr300">≈ every 5 minutes</option></select></div>
+      </div>
+      <label data-t="posts">Charging posts</label>
+      <table class="posts">
+        <thead><tr><th>#</th><th data-t="thConn">Connectors</th><th data-t="thKw">kW each</th><th data-t="thMax">Post max (kW)</th><th></th></tr></thead>
+        <tbody id="c-posts"></tbody>
+      </table>
+      <div class="row" style="margin-top:8px"><button id="b-addpost" data-t="addPost">+ Add a post</button></div>
+      <div class="f" style="margin-top:12px">
+        <div style="grid-column: 1 / -1"><label data-t="target">Where the chargers connect</label>
+          <select id="c-mode"><option value="test" data-t="modeTest">askacharge.com OCPP test server (free, no account)</option><option value="own" data-t="modeOwn">My CSMS</option></select></div>
+        <div id="own" style="grid-column: 1 / -1" hidden><label data-t="baseUrl">OCPP address without the identity (ends in /)</label>
+          <input id="c-url" class="mono" placeholder="wss://your-csms.example/ocpp/" />
+          <div class="small" data-t="ownHelp">Each charger is this address + its identity. A browser can't send a password (Basic Auth): use a CSMS or a sandbox that accepts the chargers without one, or run the site from Node.</div></div>
+        <div><label data-t="prefix">Identity prefix</label><input id="c-prefix" class="mono" maxlength="14" /></div>
+      </div>
+      <div class="row"><button id="b-start" class="primary" data-t="start">Switch the site on</button>
+        <button id="b-stop" class="danger" data-t="stopAll" hidden>Switch everything off</button>
+        <a id="watch" target="_blank" rel="noopener" hidden data-t="watch">See it on the test server →</a></div>
+      <div class="small" id="msg"></div>
+    </div>
+
+    <!-- Installation -->
+    <div class="card">
+      <h2 data-t="install">Installation</h2>
+      <svg class="flow" viewBox="0 0 520 190" aria-hidden="true">
+        <!-- grid -->
+        <g transform="translate(16,52)"><rect width="76" height="84" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+          <path d="M38 14 l-12 30 h10 l-6 26 l20 -34 h-11 l9 -22z" fill="var(--wait)"/><text x="38" y="102" text-anchor="middle" font-size="12" fill="var(--muted)" data-t="grid">Grid</text></g>
+        <!-- solar placeholder kept for later -->
+        <path class="wire" d="M92 94 H210"/><path id="w-grid" class="live" d="M92 94 H210" stroke-width="0"/>
+        <!-- main board -->
+        <g transform="translate(210,58)"><rect width="84" height="72" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+          <text x="42" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" data-t="board">Main</text>
+          <text x="42" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" data-t="board2">board</text>
+          <circle id="breaker" cx="42" cy="60" r="5" fill="var(--av)"/></g>
+        <path class="wire" d="M294 76 C340 76, 350 40, 400 40"/><path id="w-bld" class="live" d="M294 76 C340 76, 350 40, 400 40" stroke-width="0"/>
+        <path class="wire" d="M294 112 C340 112, 350 150, 400 150"/><path id="w-chg" class="live" d="M294 112 C340 112, 350 150, 400 150" stroke-width="0"/>
+        <g transform="translate(400,14)"><rect width="104" height="52" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+          <text x="52" y="22" text-anchor="middle" font-size="12" fill="var(--muted)" data-t="building">Building</text>
+          <text id="t-bld" x="52" y="41" text-anchor="middle" font-size="15" font-weight="800" fill="var(--ink)">0 kW</text></g>
+        <g transform="translate(400,124)"><rect width="104" height="52" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+          <text x="52" y="22" text-anchor="middle" font-size="12" fill="var(--muted)" data-t="chargers">Chargers</text>
+          <text id="t-chg" x="52" y="41" text-anchor="middle" font-size="15" font-weight="800" fill="var(--ink)">0 kW</text></g>
+        <text id="t-grid" x="151" y="84" text-anchor="middle" font-size="15" font-weight="800" fill="var(--ink)">0 kW</text>
+      </svg>
+      <div class="row" style="justify-content:space-between;margin-top:6px">
+        <div><span class="small" data-t="draw">From the grid</span><br><span class="big" id="t-total">0 kW</span> <span class="small" id="t-of"></span></div>
+        <div id="t-state" class="small" style="text-align:right"></div>
+      </div>
+      <svg viewBox="0 0 400 14" style="width:100%;height:14px;margin-top:6px" aria-hidden="true">
+        <rect class="gauge-bg" width="400" height="14" rx="7"/><rect id="gauge" class="gauge" width="0" height="14" rx="7"/>
+        <line id="g-lim" x1="400" x2="400" y1="0" y2="14" stroke="var(--ink)" stroke-width="2"/></svg>
+      <svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="small"><span style="color:var(--chg)">■</span> <span data-t="lgTotal">from the grid</span> · <span style="color:var(--wait)">■</span> <span data-t="lgChg">chargers</span> · <span style="color:var(--bad)">┄</span> <span data-t="lgLim">grid connection</span> · <span data-t="lgWin">last 10 minutes</span></div>
+    </div>
+  </div>
+
+  <div id="posts" class="posts-grid"></div>
+
+  <details class="card" style="margin-top:16px">
+    <summary data-t="frames">OCPP messages</summary>
+    <div class="row" style="margin-top:8px"><select id="logf" style="width:auto"><option value="" data-t="all">All chargers</option></select>
+      <label style="display:flex;gap:6px;align-items:center;margin:0"><input id="nometer" type="checkbox" style="width:auto" checked> <span data-t="hideMeter">hide MeterValues and Heartbeat</span></label></div>
+    <div id="log"></div>
+  </details>
+
+  <div class="promo">
+    <h3 data-t="promoT">Got a real site to run?</h3>
+    <p data-t="promoP">askacharge.com shares the power of a site between its chargers over standard OCPP, with your tariffs and your payments, and no ties to any manufacturer. Try it free for 30 days, no card.</p>
+    <a href="https://askacharge.com/askacharge/register?src=virtual-site" target="_blank" rel="noopener" data-t="promoB">Start your 30-day free trial</a>
+  </div>
+
+  <footer>
+    <span data-t="simple">A simulator, said plainly: OCPP is real, the physics are simplified (car charging curves, building load).</span>
+    <a href="index.html" data-t="single">One charger only</a> ·
+    <a href="https://github.com/javierojan/ocpp-virtual-charger">GitHub</a> · MIT ·
+    <span data-t="madeby">Made by</span> <a href="https://askacharge.com/askacharge/?src=virtual-site">askacharge.com</a>
+  </footer>
+</main>
+<script src="ocpp-virtual-charger.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

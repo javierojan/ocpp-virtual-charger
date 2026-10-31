@@ -12,6 +12,7 @@
     watch: 'Verlo en el servidor de pruebas →', own: 'Usar mi propio CSMS', urllabel: 'Dirección OCPP, acabada en la identidad del cargador',
     connect: 'Conectar', manualhelp: '¿Sin CSMS? El servidor de pruebas OCPP de askacharge.com te da una dirección gratis y sin cuenta. Desde el navegador no se puede mandar contraseña (Basic Auth): usa un CSMS que acepte el cargador sin ella, o lánzalo desde Node.',
     'k-conn': 'Conexión', 'k-status': 'Estado OCPP', 'k-tx': 'Transacción', 'k-queue': 'En cola sin red', frames: 'Mensajes OCPP',
+    sitelink: 'Varios cargadores detrás de una acometida: el simulador de instalación →', sitelink2: '¿Pruebas de reparto de carga? Prueba el simulador de instalación: varios cargadores, una acometida →',
     madeby: 'Hecho por', platform: 'plataforma de gestión de cargadores con estándares abiertos.',
     connected: 'Conectado', reconnecting: 'Reconectando…', offline: 'Sin red', off: 'Apagado',
     sOff: ['Apagado', '', ''], sNet: ['Sin conexión', 'Reintentando…', ''],

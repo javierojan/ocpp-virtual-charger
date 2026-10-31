@@ -2,8 +2,10 @@
 
 An **OCPP 1.6J charge point that runs in your browser or in Node.js**, with no install and no dependencies.
 Point it at any central system (CSMS), start and stop sessions, and watch every frame go by.
+Or put **a whole charging site** behind one grid connection and see whether your CSMS shares the power well.
 
-**▶ Live demo: https://askacharge.com/askacharge/virtual-charger/**
+**▶ One charger: https://askacharge.com/askacharge/virtual-charger/**
+**▶ A charging site: https://askacharge.com/askacharge/virtual-charger/site.html**
 
 It behaves like a real charger on the wire:
 
@@ -23,6 +25,31 @@ It behaves like a real charger on the wire:
 - **Credential provisioning**: in Node it accepts `ChangeConfiguration AuthorizationKey` (and `SecurityProfile` up to 2)
   and reconnects with Basic Auth, the way a CSMS hands a key to a new charger. In a browser it answers `NotSupported`.
 - Power selector on the demo page: 3.7, 7.4, 11, 22 kW AC and 50, 150 kW DC.
+- **Several connectors** per charge point (1 to 8), each with its own session, meter and status.
+- **Smart Charging that really limits the power**: `SetChargingProfile`, `ClearChargingProfile` and
+  `GetCompositeSchedule`, with `ChargePointMaxProfile`, `TxDefaultProfile` (connector 0 or one connector) and
+  `TxProfile` (also inside `RemoteStartTransaction`), stack levels, Absolute/Relative/Recurring schedules, amps or
+  watts. The next meter value shows the new power.
+- **Cars**: battery size, state of charge, what they accept in AC/DC and on how many phases. A car never draws less
+  than 6 A per phase while it isn't full; when the limit leaves less than that, it waits (`SuspendedEVSE`); when it is
+  full, it stops by itself (`SuspendedEV`). If a cap can't give 6 A to everyone, the first to arrive charges and the
+  others wait, never all of them below the minimum. `MeterValues` carry `SoC`.
+- **Power cut** (not just a network cut): sessions end with reason `PowerLoss`, delivered when the charger boots again.
+
+## A charging site
+
+`site.html` puts several chargers behind one grid connection, for testing load balancing. Everything is a setting on
+the page: grid connection (kW), building load (fixed or varying), the main breaker tripping if the site goes over it
+for 10, 30 or 60 s, the posts (how many, connectors each, kW each, post maximum), how fast the batteries fill, and cars
+arriving on their own. It draws the power flowing from the grid to the building and the chargers, a 10-minute chart
+against the grid limit, and every connector with its car, its power and the profile limiting it.
+
+From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
+a table every few seconds:
+
+```bash
+node examples/site.js examples/site.example.json
+```
 
 ## Use it in the browser
 
@@ -83,13 +110,17 @@ const charger = OcppVirtualCharger('wss://your-csms.example/ocpp/CP-001', {
 
 Said plainly, so you don't find out the hard way:
 
-- **OCPP 1.6J only**, one connector. No OCPP 2.0.1 yet.
+- **OCPP 1.6J only**. No OCPP 2.0.1 yet.
 - In the browser it **cannot send Basic Auth**: WebSocket APIs in browsers don't allow custom headers. Use a CSMS
   that accepts the charger without a password, or run it from Node.
 - `ChangeConfiguration` applies `HeartbeatInterval`, `MeterValueSampleInterval` and, in Node, `AuthorizationKey`
   and `SecurityProfile` (1-2). Any other key it knows is read-only (`Rejected`); the rest, `NotSupported`.
   `ClearCache` is accepted: there is no cache to clear.
-- Firmware, diagnostics, reservations, smart charging and local lists answer `NotImplemented`.
+- Firmware, diagnostics, reservations and local lists answer `NotImplemented`.
+- The physics are simplified on purpose: flat charging curves with a taper near the end, 230 V per phase, DC current
+  at a 400 V battery, building load as a random walk. Good for seeing what a CSMS does, not for sizing an installation.
+- The site page doesn't measure the grid for your CSMS: it shows what the chargers draw. A CSMS that reads a real
+  meter needs its own channel for that (MQTT, Modbus, an API), which is outside OCPP 1.6.
 - It is a simulator for development, demos and testing, **not a conformance tester**. For certification-grade
   testing, the Open Charge Alliance has the OCTT.
 
@@ -97,8 +128,15 @@ Said plainly, so you don't find out the hard way:
 
 Un cargador OCPP 1.6J que funciona en el navegador o en Node.js, sin instalar nada. Lo apuntas a cualquier
 plataforma de gestión (CSMS), arrancas y paras cargas, simulas cortes de red y ves cada mensaje.
-Demo: https://askacharge.com/askacharge/virtual-charger/ · Si no tienes un CSMS a mano, el
+Demo: https://askacharge.com/askacharge/virtual-charger/ · Instalación con varios cargadores, acometida y
+reparto de carga: https://askacharge.com/askacharge/virtual-charger/site.html · Si no tienes un CSMS a mano, el
 [servidor de pruebas de askacharge.com](https://askacharge.com/askacharge/probar-ocpp.html) te da una dirección gratis y sin cuenta.
+
+## Tests
+
+```bash
+npm test   # node --test, no network: an in-memory CSMS checks profiles, sharing, cars and power cuts
+```
 
 ## License
 
