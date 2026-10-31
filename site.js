@@ -414,6 +414,15 @@
       });
       if (free.length) { var f = free[Math.floor(Math.random() * free.length)]; arrive(f[0], f[1]); }
     }
+    // Un coche aparcado y enchufado sin carga (tras un corte de luz, o si la tarjeta no pasó) vuelve a pasar su
+    // tarjeta, como haría el conductor o el propio cargador al volver la luz
+    cars.forEach(function (car) {
+      if (car.phase !== 'parked') return;
+      var post = live[car.ci], s = post && post.charger.state, c = s && s.connectors[car.hose - 1];
+      if (!c || !s.connected || s.powerOff || !c.plugged || c.transactionId != null || c.status !== 'Preparing') { car.idleSince = null; return; }
+      car.idleSince = car.idleSince || now;
+      if (now - car.idleSince > 4000 && (!car.retap || now - car.retap > 30000)) { car.retap = now; post.charger.tapCard(car.card, car.hose); }
+    });
     if (cfg.arr > 0) cars.forEach(function (car) {
       if (car.phase !== 'parked') return;
       var c = live[car.ci] && live[car.ci].charger.state.connectors[car.hose - 1];
