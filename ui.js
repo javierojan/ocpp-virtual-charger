@@ -138,7 +138,7 @@
     if (charger) charger.close();
     $('log').textContent = '';
     charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true, powerKw: ratedKw,
-      model: ES ? 'Cargador virtual (navegador)' : 'Virtual charger (browser)' });
+      model: ES ? 'Virtual (navegador)' : 'Virtual (browser)' });   // CiString20: OCPP 1.6 admits 20 characters
     paint();
   }
 

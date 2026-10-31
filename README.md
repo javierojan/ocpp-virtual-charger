@@ -72,7 +72,7 @@ const charger = OcppVirtualCharger('wss://your-csms.example/ocpp/CP-001', {
 |---|---|---|
 | `onChange(state)` | — | Called on every state change |
 | `onFrame(direction, frame)` | — | `'out'` or `'in'`, with the raw OCPP-J frame |
-| `vendor`, `model`, `firmware` | `ocpp-virtual-charger`, `Virtual charger`, `1.0` | Sent in `BootNotification` |
+| `vendor`, `model`, `firmware` | `ocpp-virtual-charger`, `Virtual charger`, `1.0` | Sent in `BootNotification`, cut to the OCPP 1.6 limits (20, 20 and 50 characters) |
 | `powerKw` | `7.4` | Rated power. Up to 7.4 kW: one-phase AC; up to 22 kW: three-phase AC (current on L1, L2, L3); above: DC. `setPower(kw)` changes it, mid-session too |
 | `meterIntervalSec` | `5` | `MeterValues` interval while charging |
 | `heartbeatSec` | `60` | Until the CSMS sets its own interval |

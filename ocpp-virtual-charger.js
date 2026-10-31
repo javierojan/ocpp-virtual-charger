@@ -257,8 +257,11 @@
     }
 
     function boot() {
-      return call('BootNotification', { chargePointVendor: options.vendor || 'ocpp-virtual-charger',
-        chargePointModel: options.model || 'Virtual charger', firmwareVersion: options.firmware || '1.0' })
+      // OCPP 1.6 BootNotification: vendor and model are CiString20, firmwareVersion CiString50. Longer is a
+      // TypeConstraintViolation, so they are cut here rather than sent wrong.
+      return call('BootNotification', { chargePointVendor: String(options.vendor || 'ocpp-virtual-charger').slice(0, 20),
+        chargePointModel: String(options.model || 'Virtual charger').slice(0, 20),
+        firmwareVersion: String(options.firmware || '1.0').slice(0, 50) })
         .then(function (r) {
           if (r && r.interval > 0) heartbeatMs = r.interval * 1000;
           return r;
