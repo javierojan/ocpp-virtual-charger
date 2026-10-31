@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OCPP virtual charger — plug in, tap a card, watch it charge</title>
+  <meta name="description" content="A virtual OCPP 1.6J wall charger in your browser: plug the car in, tap a card and watch it charge, while every OCPP message goes to a real server. No install." />
+  <style>
+    :root { --bg:#eef2f7; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --acc:#16a34a; --out:#1d4ed8; --in:#7c3aed; --wall:#f8fafc; --floor:#e2e8f0; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0b1220; --card:#111a2e; --ink:#e2e8f0; --muted:#94a3b8; --line:#1e293b; --acc:#22c55e; --out:#60a5fa; --in:#c084fc; --wall:#0f172a; --floor:#1e293b; } }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+    main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 1.45rem; margin: 0 0 2px; } .lead { color: var(--muted); margin: 0 0 16px; }
+    .grid { display:grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+    @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    svg.scene { width: 100%; height: auto; display: block; border-radius: 10px; background: var(--wall); }
+    .hint { text-align:center; font-weight:600; margin: 10px 0 2px; min-height: 1.5em; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top: 8px; }
+    button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer; font-size: .95rem; }
+    button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+    button:disabled { opacity: .4; cursor: default; }
+    label { display:block; font-weight:600; font-size:.9rem; margin: 0 0 6px; }
+    input { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font:13px ui-monospace,monospace; background:var(--bg); color:var(--ink); }
+    .small { color: var(--muted); font-size: .82rem; margin-top: 6px; }
+    .stats { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .stat .k { color: var(--muted); font-size: .76rem; } .stat .v { font-weight: 700; }
+    details { margin-top: 16px; } summary { cursor: pointer; font-weight: 700; }
+    #log { font: 12px/1.45 ui-monospace,monospace; max-height: 320px; overflow:auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+    .out { color: var(--out); } .in { color: var(--in); }
+    footer { color: var(--muted); font-size: .85rem; margin-top: 20px; } a { color: var(--acc); }
+    /* Scene */
+    .clickable { cursor: pointer; }
+    #led { transition: stroke .3s; }
+    .st-off #led { stroke: #94a3b8; } .st-Available #led { stroke: #22c55e; }
+    .st-Preparing #led { stroke: #3b82f6; animation: pulse 1.4s ease-in-out infinite; }
+    .st-Charging #led { stroke: #3b82f6; stroke-dasharray: 40 18; animation: spin 1.2s linear infinite; }
+    .st-Finishing #led { stroke: #f59e0b; } .st-Faulted #led { stroke: #ef4444; }
+    @keyframes pulse { 50% { opacity: .35; } }
+    @keyframes spin { to { stroke-dashoffset: -116; } }
+    #cable { transition: d .5s ease; }
+    #rfidcard { transition: transform .45s ease; }
+    #rfidcard.tap { transform: translate(-88px, -140px) rotate(-8deg); }
+    #bolt { opacity: 0; transition: opacity .3s; } .st-Charging #bolt { opacity: 1; animation: pulse 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 data-t="title">OCPP virtual charger</h1>
+  <p class="lead" data-t="lead">A wall charger that lives in this tab. Plug the car in, tap the card and watch it charge, while every OCPP message goes to a real server.</p>
+
+  <div class="grid">
+    <div class="card">
+      <svg class="scene st-off" id="scene" viewBox="0 0 640 380" role="img" aria-label="Virtual charger and car">
+        <rect x="0" y="318" width="640" height="62" fill="var(--floor)"/>
+        <!-- Wallbox -->
+        <g transform="translate(70,40)">
+          <rect x="0" y="0" width="150" height="230" rx="26" fill="#1e293b"/>
+          <rect x="6" y="6" width="138" height="218" rx="22" fill="#273449"/>
+          <rect x="20" y="22" width="110" height="64" rx="8" fill="#0b1324" stroke="#334155"/>
+          <text id="scr1" x="75" y="46" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">—</text>
+          <text id="scr2" x="75" y="64" text-anchor="middle" fill="#94a3b8" font-size="10.5">&#160;</text>
+          <text id="scr3" x="75" y="79" text-anchor="middle" fill="#94a3b8" font-size="10.5">&#160;</text>
+          <circle id="led" cx="75" cy="138" r="26" fill="none" stroke-width="7" stroke-linecap="round"/>
+          <g fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" transform="translate(75,138)">
+            <path d="M-6 -7 a9 9 0 0 1 0 14"/><path d="M-1 -11 a14 14 0 0 1 0 22"/><path d="M4 -15 a19 19 0 0 1 0 30"/>
+          </g>
+          <text x="75" y="188" text-anchor="middle" fill="#64748b" font-size="9" letter-spacing="1">RFID</text>
+          <rect x="60" y="212" width="30" height="14" rx="4" fill="#0f172a"/>
+        </g>
+        <!-- Cable: from the charger to the holster, or to the car -->
+        <path id="cable" class="clickable" fill="none" stroke="#111827" stroke-width="7" stroke-linecap="round"
+              d="M145 266 C 145 330, 120 345, 110 300"/>
+        <!-- Card -->
+        <g id="rfidcard" class="clickable" transform="translate(0,0)">
+          <g transform="translate(205,300)">
+            <rect x="0" y="0" width="56" height="36" rx="5" fill="#2563eb"/>
+            <rect x="7" y="9" width="12" height="9" rx="2" fill="#fbbf24"/>
+            <rect x="7" y="25" width="38" height="3" rx="1.5" fill="#bfdbfe"/>
+          </g>
+        </g>
+        <!-- Car -->
+        <g id="car" class="clickable" transform="translate(300,150)">
+          <path d="M20 150 L20 110 Q22 92 45 88 L105 82 Q130 48 165 44 L240 42 Q272 44 292 78 L318 88 Q332 94 332 112 L332 150 Z" fill="#0ea5e9"/>
+          <path d="M115 84 Q136 56 166 54 L196 54 L196 84 Z M206 54 L238 54 Q262 56 278 84 L206 84 Z" fill="#e0f2fe" opacity=".9"/>
+          <circle cx="85" cy="152" r="26" fill="#111827"/><circle cx="85" cy="152" r="11" fill="#94a3b8"/>
+          <circle cx="270" cy="152" r="26" fill="#111827"/><circle cx="270" cy="152" r="11" fill="#94a3b8"/>
+          <rect x="300" y="98" width="20" height="14" rx="3" fill="#0369a1"/>
+          <!-- Battery -->
+          <rect x="140" y="104" width="76" height="30" rx="6" fill="#0c4a6e"/>
+          <rect x="216" y="113" width="5" height="12" rx="1.5" fill="#0c4a6e"/>
+          <rect id="batfill" x="144" y="108" width="20" height="22" rx="3" fill="#4ade80"/>
+          <text id="batpct" x="178" y="124" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">35%</text>
+          <path id="bolt" d="M232 96 l-10 18 h8 l-6 16 l14 -20 h-8 l6 -14 z" fill="#facc15"/>
+        </g>
+      </svg>
+      <div class="hint" id="hint">&#160;</div>
+      <div class="row">
+        <button id="b-plug" disabled data-t="plug">Plug the car in</button>
+        <button id="b-card" disabled data-t="card">Tap the card</button>
+        <button id="b-outage" disabled data-t="outage">Network outage (20 s)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="auto" hidden>
+        <button class="primary" id="b-on" style="width:100%" data-t="on">Switch the charger on</button>
+        <p class="small" data-t="autohelp">It connects to the free askacharge.com test server. You can watch what the server receives, live:</p>
+        <p class="small"><a id="watch" href="#" target="_blank" rel="noopener" hidden data-t="watch">See it on the test server →</a></p>
+        <p class="small"><a href="#" id="own" data-t="own">Use my own CSMS instead</a></p>
+      </div>
+      <div id="manual" hidden>
+        <label for="url" data-t="urllabel">OCPP URL, ending in the charger identity</label>
+        <input id="url" placeholder="wss://your-csms.example/ocpp/CP-001" />
+        <button class="primary" id="b-connect" style="width:100%;margin-top:8px" data-t="connect">Connect</button>
+        <p class="small" data-t="manualhelp">No CSMS? Get a free URL, no account, from the askacharge.com OCPP test server. In a browser it can't send a password (Basic Auth): use a CSMS that accepts the charger without one, or run it from Node.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k" data-t="k-conn">Connection</div><div class="v" id="s-conn">—</div></div>
+        <div class="stat"><div class="k" data-t="k-status">OCPP status</div><div class="v" id="s-status">—</div></div>
+        <div class="stat"><div class="k" data-t="k-tx">Transaction</div><div class="v" id="s-tx">—</div></div>
+        <div class="stat"><div class="k" data-t="k-queue">Queued offline</div><div class="v" id="s-queue">—</div></div>
+      </div>
+      <details>
+        <summary data-t="frames">OCPP messages</summary>
+        <div id="log"></div>
+      </details>
+    </div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/javierojan/ocpp-virtual-charger">GitHub</a> · MIT ·
+    <span data-t="madeby">Made by</span> <a href="https://askacharge.com/askacharge/?src=virtual-charger">askacharge.com</a>,
+    <span data-t="platform">an open-standards EV charging platform.</span>
+  </footer>
+</main>
+<script src="ocpp-virtual-charger.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
