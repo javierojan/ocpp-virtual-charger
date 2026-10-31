@@ -86,8 +86,10 @@ Said plainly, so you don't find out the hard way:
 - **OCPP 1.6J only**, one connector. No OCPP 2.0.1 yet.
 - In the browser it **cannot send Basic Auth**: WebSocket APIs in browsers don't allow custom headers. Use a CSMS
   that accepts the charger without a password, or run it from Node.
-- `ChangeConfiguration`, `ChangeAvailability`, `Reset` and `ClearCache` are acknowledged but not acted upon.
-  Firmware, diagnostics, reservations, smart charging and local lists answer `NotImplemented`.
+- `ChangeConfiguration` applies `HeartbeatInterval`, `MeterValueSampleInterval` and, in Node, `AuthorizationKey`
+  and `SecurityProfile` (1-2). Any other key it knows is read-only (`Rejected`); the rest, `NotSupported`.
+  `ClearCache` is accepted: there is no cache to clear.
+- Firmware, diagnostics, reservations, smart charging and local lists answer `NotImplemented`.
 - It is a simulator for development, demos and testing, **not a conformance tester**. For certification-grade
   testing, the Open Charge Alliance has the OCTT.
 
