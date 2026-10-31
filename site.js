@@ -63,7 +63,7 @@
   var POWERS = [3.7, 7.4, 11, 22, 50, 150];
 
   // ── Settings ────────────────────────────────────────────────────────────────────────────────────────
-  var DEFAULT = { grid: 30, base: 6, baseVar: 1, trip: 0, speed: 60, arr: 0, mode: HOSTED ? 'test' : 'own', url: '', prefix: 'SITE',
+  var DEFAULT = { grid: 30, base: 6, baseVar: 1, trip: 0, speed: 1, arr: 0, mode: HOSTED ? 'test' : 'own', url: '', prefix: 'SITE',
                   posts: [{ conn: 2, kw: 11, max: 22 }, { conn: 2, kw: 11, max: 22 }, { conn: 2, kw: 22, max: 22 }, { conn: 2, kw: 22, max: 44 }] };
   var cfg;
   try { cfg = JSON.parse(localStorage.getItem('ovc-site') || 'null'); } catch (e) {}

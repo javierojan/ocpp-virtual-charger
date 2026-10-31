@@ -43,7 +43,8 @@
     .st-off #led { stroke: #94a3b8; } .st-Available #led { stroke: #22c55e; }
     .st-Preparing #led { stroke: #3b82f6; animation: pulse 1.4s ease-in-out infinite; }
     .st-Charging #led { stroke: #3b82f6; stroke-dasharray: 40 18; animation: spin 1.2s linear infinite; }
-    .st-Finishing #led { stroke: #f59e0b; } .st-Faulted #led { stroke: #ef4444; }
+    .st-Finishing #led, .st-SuspendedEV #led { stroke: #f59e0b; }
+    .st-SuspendedEVSE #led { stroke: #f59e0b; animation: pulse 1.4s ease-in-out infinite; } .st-Faulted #led { stroke: #ef4444; }
     @keyframes pulse { 50% { opacity: .35; } }
     @keyframes spin { to { stroke-dashoffset: -116; } }
     #cable { transition: d .5s ease; }
@@ -111,6 +112,17 @@
         <button data-kw="11">11 kW</button><button data-kw="22">22 kW</button>
         <button data-kw="50">50 kW DC</button><button data-kw="150">150 kW DC</button>
       </div>
+      <div class="seg" id="cars">
+        <span data-t="carLbl">Car</span>
+        <button data-car="small">40 kWh</button><button data-car="saloon" class="on">64 kWh</button>
+        <button data-car="suv">77 kWh</button><button data-car="big">100 kWh</button>
+      </div>
+      <div class="seg" id="speeds">
+        <span data-t="speedLbl">Battery fills</span>
+        <button data-x="1" class="on" data-t="real">real time</button><button data-x="10">×10</button>
+        <button data-x="60">×60</button><button data-x="300">×300</button>
+      </div>
+      <p class="small" style="text-align:center;margin:4px 0 0" data-t="speedNote">Only the battery speeds up: the meter sent to the CSMS always counts the real energy.</p>
       <div class="row">
         <button id="b-plug" disabled data-t="plug">Plug the car in</button>
         <button id="b-card" disabled data-t="card">Tap the card</button>

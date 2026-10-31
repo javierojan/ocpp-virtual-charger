@@ -13,6 +13,10 @@
     connect: 'Conectar', manualhelp: '¿Sin CSMS? El servidor de pruebas OCPP de askacharge.com te da una dirección gratis y sin cuenta. Desde el navegador no se puede mandar contraseña (Basic Auth): usa un CSMS que acepte el cargador sin ella, o lánzalo desde Node.',
     'k-conn': 'Conexión', 'k-status': 'Estado OCPP', 'k-tx': 'Transacción', 'k-queue': 'En cola sin red', frames: 'Mensajes OCPP',
     sitelink: 'Varios cargadores detrás de una acometida: el simulador de instalación →', sitelink2: '¿Pruebas de reparto de carga? Prueba el simulador de instalación: varios cargadores, una acometida →',
+    speedNote: 'Solo se acelera la batería: el contador que va al servidor cuenta siempre la energía real.', carLbl: 'Coche', speedLbl: 'La batería se llena', real: 'a velocidad real',
+    sFull: ['Batería llena', '', 'Retire el cable'], sPause: ['En pausa', 'limitada por el servidor', ''],
+    hFull: 'El coche está lleno y ha dejado de cargar: ha mandado SuspendedEV. La sesión sigue abierta hasta que desenchufes o pases la tarjeta.',
+    hPause: 'La plataforma ha bajado la potencia por debajo del mínimo (6 A): el coche espera (SuspendedEVSE).',
     madeby: 'Hecho por', platform: 'plataforma de gestión de cargadores con estándares abiertos.',
     connected: 'Conectado', reconnecting: 'Reconectando…', offline: 'Sin red', off: 'Apagado',
     sOff: ['Apagado', '', ''], sNet: ['Sin conexión', 'Reintentando…', ''],
@@ -41,7 +45,10 @@
     hOff: 'Switch the charger on to start.', hAvail: 'Plug the car in (or click it) and tap the card.',
     hPrep: 'Now tap the card on the reader.', hAuth: 'Card accepted: plug the car in.', hChg: 'Charging. Tap the same card to stop, or unplug.',
     hFin: 'Session ended: unplug the car.', hOut: 'Network outage: it keeps charging and queues its messages for when it is back.',
-    queued: ' messages', delivered: ' delivered'
+    queued: ' messages', delivered: ' delivered',
+    sFull: ['Battery full', '', 'Unplug the cable'], sPause: ['Paused', 'limited by the CSMS', ''],
+    hFull: 'The car is full and has stopped charging: it sent SuspendedEV. The session stays open until you unplug or tap the card.',
+    hPause: 'The CSMS lowered the power below the minimum (6 A): the car waits (SuspendedEVSE).'
   };
   if (ES) {
     document.documentElement.lang = 'es';
@@ -63,6 +70,24 @@
     };
   });
   $('rating').textContent = ratingText(ratedKw);
+
+  // The car on the drive: a real battery (kWh, state of charge, what it accepts), so it fills up and stops by itself.
+  var CARS = { small: { batteryKwh: 40, maxAcKw: 7.4, maxDcKw: 50, phases: 1 }, saloon: { batteryKwh: 64, maxAcKw: 11, maxDcKw: 100, phases: 3 },
+               suv: { batteryKwh: 77, maxAcKw: 11, maxDcKw: 150, phases: 3 }, big: { batteryKwh: 100, maxAcKw: 22, maxDcKw: 150, phases: 3 } };
+  var carKind = 'saloon', socSpeed = 1;
+  function makeCar() {
+    var c = JSON.parse(JSON.stringify(CARS[carKind])); c.soc = Math.round(20 + Math.random() * 20); c.targetSoc = 100; return c;
+  }
+  function segment(id, attr, onPick) {
+    Array.prototype.forEach.call(document.querySelectorAll('#' + id + ' button'), function (b) {
+      b.onclick = function () {
+        Array.prototype.forEach.call(document.querySelectorAll('#' + id + ' button'), function (x) { x.classList.toggle('on', x === b); });
+        onPick(b.dataset[attr]);
+      };
+    });
+  }
+  segment('cars', 'car', function (k) { carKind = k; });
+  segment('speeds', 'x', function (x) { socSpeed = parseFloat(x); if (charger) charger.setSocSpeed(socSpeed); });
 
   var CABLE_OUT = 'M145 266 C 145 330, 120 345, 110 300';
   var CABLE_IN = 'M145 266 C 170 372, 560 372, 602 256';
@@ -106,9 +131,12 @@
     else if (s.offline) { lines = [TXT.sOut[0], TXT.sOut[1], fmt(s.sessionWh / 1000, 2) + ' kWh']; hint = TXT.hOut; }
     else if (!s.connected) { lines = TXT.sNet; hint = ''; }
     else if (s.status === 'Charging') {
-      lines = [TXT.sChg[0], fmt(s.powerKw, 1) + ' kW · ' + fmt(s.sessionWh / 1000, 2) + ' kWh', clock(Date.now() - (s.startedAt || Date.now()))];
+      lines = [TXT.sChg[0], fmt(s.powerKw, 1) + ' kW · ' + fmt(s.sessionWh / 1000, 2) + ' kWh',
+               clock(Date.now() - (s.startedAt || Date.now())) + (s.car ? ' · ' + Math.floor(s.car.soc) + ' %' : '')];
       hint = TXT.hChg;
-    } else if (s.status === 'Finishing') { lines = [TXT.sFin[0], fmt(s.sessionWh / 1000, 2) + ' kWh', TXT.sFin[2]]; hint = TXT.hFin; }
+    } else if (s.status === 'SuspendedEV') { lines = [TXT.sFull[0], fmt(s.sessionWh / 1000, 2) + ' kWh', TXT.sFull[2]]; hint = TXT.hFull; }
+    else if (s.status === 'SuspendedEVSE') { lines = [TXT.sPause[0], TXT.sPause[1], fmt(s.sessionWh / 1000, 2) + ' kWh']; hint = TXT.hPause; }
+    else if (s.status === 'Finishing') { lines = [TXT.sFin[0], fmt(s.sessionWh / 1000, 2) + ' kWh', TXT.sFin[2]]; hint = TXT.hFin; }
     else if (s.status === 'Unavailable') { lines = TXT.sUnav; hint = TXT.hUnav; }
     else if (s.awaitingPlug) { lines = TXT.sAuth; hint = TXT.hAuth; }
     else if (s.status === 'Preparing') { lines = TXT.sPrep; hint = TXT.hPrep; }
@@ -116,10 +144,10 @@
     screen(lines);
     $('hint').textContent = hint || ' ';
 
-    // Battery: the text is the real energy of the session; the bar is just there to show it filling up
-    var kwh = s ? s.sessionWh / 1000 : 0;
-    $('batfill').setAttribute('width', String(Math.max(4, Math.min(64, 8 + kwh * 300))));
-    $('batpct').textContent = '+' + fmt(kwh, 2) + ' kWh';
+    // Battery: the car's real state of charge (it fills at the power delivered, faster only if you ask for it)
+    var soc = s && s.car ? s.car.soc : null;
+    $('batfill').setAttribute('width', String(soc == null ? 0 : Math.max(3, 68 * soc / 100)));
+    $('batpct').textContent = soc == null ? '' : Math.floor(soc) + ' %';
 
     var on = !!s;
     $('b-plug').disabled = !on || !s.connected && !s.offline;
@@ -138,7 +166,7 @@
   function start(url) {
     if (charger) charger.close();
     $('log').textContent = '';
-    charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true, powerKw: ratedKw,
+    charger = OcppVirtualCharger(url, { onChange: paint, onFrame: log, waitForPlug: true, powerKw: ratedKw, socSpeed: socSpeed,
       model: ES ? 'Virtual (navegador)' : 'Virtual (browser)' });   // CiString20: OCPP 1.6 admits 20 characters
     paint();
   }
@@ -164,7 +192,7 @@
 
   function togglePlug() {
     if (!charger) return;
-    if (charger.state.plugged) charger.unplug(); else charger.plugIn();
+    if (charger.state.plugged) charger.unplug(); else charger.plugIn(1, makeCar());
   }
   function tap() {
     if (!charger || !charger.state.connected) return;
