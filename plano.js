@@ -209,7 +209,7 @@
     function save() { site.save(); }
 
     // Tabs: the car park as it was, or the plan
-    var view = cfg.view === 'plan' ? 'plan' : 'park';
+    var view = cfg.view === 'plan' || /^#(plan|plano)$/.test(root.location.hash) ? 'plan' : 'park';
     $('tab-park').textContent = T.tabPark; $('tab-plan').textContent = T.tabPlan;
     function showView(v) {
       view = v; cfg.view = v; save();
