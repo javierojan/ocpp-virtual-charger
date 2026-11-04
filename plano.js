@@ -146,7 +146,7 @@
     var SVGNS = 'http://www.w3.org/2000/svg', cfg = site.cfg, ES = site.ES;
     var T = ES ? {
       tabPark: 'Parking', tabPlan: 'Plano',
-      move: 'Mover', outline: 'Contorno', rows: 'Plazas', board: 'Cuadro', charger: 'Cargador', line: 'Línea', erase: 'Borrar',
+      move: '✋ Mover', outline: '✏️ Contorno', rows: '▥ Plazas', board: '▣ Cuadro', charger: '⚡ Cargador', line: '〰 Línea', erase: '✕ Borrar',
       hMove: 'Arrastra el cuadro o un cargador. Pincha una línea y arrastra sus puntos; el punto pequeño del medio de cada tramo crea una esquina nueva. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
       hOutline: 'Pincha las esquinas del garaje; para cerrar, pincha en la primera. Las medidas se corrigen abajo, tramo a tramo.',
       hRows: 'Arrastra a lo largo de la pared para poner una fila de plazas de 2,5 × 5 m. Pincha una fila para darle la vuelta.',
@@ -169,7 +169,7 @@
       unplaced: 'Sin colocar: {n}', sbLines: 'El SB respeta también la protección de cada línea.'
     } : {
       tabPark: 'Car park', tabPlan: 'Plan',
-      move: 'Move', outline: 'Outline', rows: 'Bays', board: 'Main board', charger: 'Charger', line: 'Cable', erase: 'Delete',
+      move: '✋ Move', outline: '✏️ Outline', rows: '▥ Bays', board: '▣ Main board', charger: '⚡ Charger', line: '〰 Line (cable)', erase: '✕ Delete',
       hMove: 'Drag the main board or a charger. Click a cable and drag its points; the small dot in the middle of each stretch makes a new corner. With the site on, click a charger to send a car (or make it leave).',
       hOutline: 'Click the corners of the garage; click the first one to close it. Fix the measurements below, stretch by stretch.',
       hRows: 'Drag along the wall to add a row of 2.5 × 5 m bays. Click a row to flip it.',
@@ -245,7 +245,7 @@
     }
 
     // Coordinates: the SVG works in metres; the view box fits the drawing
-    var svg = $('plan'), vb = { x: -4, y: -4, w: 60, h: 40 }, U = 1;
+    var svg = $('plan-svg'), vb = { x: -4, y: -4, w: 60, h: 40 }, U = 1;
     function fit() {
       var pts = outlinePoints(plan.outline).slice();
       plan.rows.forEach(function (r) { pts.push(r.a, r.b); });
@@ -661,7 +661,7 @@
       selLine = null; drawing = null; runtime = {}; save();
       $('new-confirm').hidden = true; $('b-plan-new').hidden = false;
       setTool('outline'); tramosPanel(); sidePanel();
-      $('plan').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      $('plan-view').scrollIntoView({ block: 'start', behavior: 'smooth' });
     };
     $('b-plan-reset').onclick = function () { plan = cfg.plan = defaultPlan(); selLine = 'L1'; save(); draw(); tramosPanel(); sidePanel(); };
     $('drop-note').textContent = T.dropNote;

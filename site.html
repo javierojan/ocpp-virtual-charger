@@ -66,6 +66,7 @@
     /* Plan view */
     .tabs { display:flex; gap:6px; margin-bottom:10px; }
     .tabs button { color: var(--muted); } .tabs button.on { color: var(--ink); border-color: var(--ink); }
+    .pbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; background: var(--card); padding: 6px 0 8px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
     .ptools { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
     .ptools button { padding:6px 10px; font-size:.82rem; font-weight:600; background: var(--soft); }
     .ptools button.on { background: var(--ink); color: var(--card); border-color: var(--ink); }
@@ -132,13 +133,15 @@
         <div class="small" style="margin-top:6px" data-t="parkHelp">Click a charger to name it and set its power · click an empty bay to send a car · click a car to make it leave.</div>
       </div>
       <div id="plan-view" hidden>
-        <div class="ptools" id="plan-tools"></div>
-        <div class="small" id="plan-hint" style="margin-bottom:6px"></div>
-        <div class="row-b" id="line-actions" hidden style="margin:0 0 6px"><button type="button" id="b-finish" class="primary"></button><button type="button" id="b-cancel-line"></button></div>
-        <svg id="plan" class="plan" aria-label="Plan"></svg>
+        <div class="pbar">
+          <div class="row-b" style="margin:0 0 8px"><button type="button" id="b-plan-new" class="primary"></button><span id="new-confirm" hidden><span class="small" id="new-q"></span> <button type="button" id="b-new-yes" class="danger"></button> <button type="button" id="b-new-no"></button></span><button type="button" id="b-plan-save"></button><button type="button" id="b-plan-load"></button><button type="button" id="b-plan-reset"></button>
+            <input type="file" id="plan-file" accept="application/json,.json" hidden></div>
+          <div class="ptools" id="plan-tools"></div>
+          <div class="small" id="plan-hint"></div>
+          <div class="row-b" id="line-actions" hidden style="margin:6px 0 0"><button type="button" id="b-finish" class="primary"></button><button type="button" id="b-cancel-line"></button></div>
+        </div>
+        <svg id="plan-svg" class="plan" aria-label="Plan"></svg>
         <div class="tramos-box"><div id="tramos"></div></div>
-        <div class="row-b"><button type="button" id="b-plan-new" class="primary"></button><span id="new-confirm" hidden><span class="small" id="new-q"></span> <button type="button" id="b-new-yes" class="danger"></button> <button type="button" id="b-new-no"></button></span><button type="button" id="b-plan-save"></button><button type="button" id="b-plan-load"></button><button type="button" id="b-plan-reset"></button>
-          <input type="file" id="plan-file" accept="application/json,.json" hidden></div>
         <p class="small" id="drop-note"></p>
       </div>
     </div>
@@ -222,8 +225,8 @@
   </form>
 </dialog>
 
-<script src="ocpp-virtual-charger.js?v=4nov4"></script>
-<script src="plano.js?v=4nov4"></script>
-<script src="site.js?v=4nov4"></script>
+<script src="ocpp-virtual-charger.js?v=4nov5"></script>
+<script src="plano.js?v=4nov5"></script>
+<script src="site.js?v=4nov5"></script>
 </body>
 </html>
