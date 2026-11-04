@@ -361,7 +361,7 @@
         el('line', { x1: r2(en.a[0]), y1: r2(en.a[1]), x2: r2(en.b[0]), y2: r2(en.b[1]), class: 'door' }, svg);
         [en.a, en.b].forEach(function (q) { el('line', { x1: r2(q[0] - en.n[0] * 0.5), y1: r2(q[1] - en.n[1] * 0.5), x2: r2(q[0] + en.n[0] * 0.5), y2: r2(q[1] + en.n[1] * 0.5), class: 'jamb' }, svg); });
         arrowIn(en, svg, 'doorarrow');
-        el('text', { x: r2(en.c[0] + en.n[0] * (3 + 2.2 * U)), y: r2(en.c[1] + en.n[1] * (3 + 1.6 * U) + 0.4 * U), 'text-anchor': 'middle', 'font-size': r2(1.15 * U), class: 'clab' }, svg).textContent = T.entr;   // inside: the wall's measurement is outside
+        el('text', { x: r2(en.c[0] + en.n[0] * (3 + 4 * U)), y: r2(en.c[1] + en.n[1] * (3 + 2.4 * U) + 0.4 * U), 'text-anchor': 'middle', 'font-size': r2(1.15 * U), class: 'clab' }, svg).textContent = T.entr;   // inside: the wall's measurement is outside
       }
       // Bays
       plan.rows.forEach(function (r, ri) {
