@@ -508,7 +508,7 @@
   $('logf').onchange = function () { $('log').textContent = ''; };
   // What the plan view (plano.js) needs from the site
   var site = { cfg: cfg, ES: ES, save: save, live: function () { return live; }, running: function () { return running; },
-               bays: function () { return bays; }, arrive: arrive, leave: leave, openDialog: openDialog, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
+               bays: function () { return bays; }, arrive: arrive, leave: leave, openDialog: openDialog, openLga: openLga, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
   if (window.OvcPlano) window.OvcPlano.mount(site);
   lgaButton();
   layout();

@@ -91,6 +91,26 @@
     svg.plan .bayst { opacity: .28; } svg.plan .pcar { cursor: pointer; } svg.plan .carbody { stroke: rgba(0,0,0,.45); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
     svg.plan .hose2 { stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke; } svg.plan .hose2.flow { stroke-dasharray: 2 7; animation: flow .7s linear infinite; }
     svg.plan .boardbox { fill: #1e293b; } svg.plan .boardtxt { fill: #fff; font-weight: 800; font-family: system-ui, sans-serif; }
+    svg.plan .door { stroke: var(--soft); stroke-width: 7; vector-effect: non-scaling-stroke; }
+    svg.plan .jamb { stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
+    svg.plan .doorarrow { fill: none; stroke: var(--acc); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    /* Car park drawn from the plan: same look as the sample car park */
+    svg.plan.park2 { background: var(--grass); touch-action: auto; }
+    svg.park2 .floor { fill: var(--asphalt); stroke: var(--curb); stroke-width: 6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.park2 .door2 { stroke: var(--asphalt); stroke-width: 8; vector-effect: non-scaling-stroke; }
+    svg.park2 .ramp { fill: var(--asphalt2); }
+    svg.park2 .doorarrow2 { fill: none; stroke: var(--paint); opacity: .7; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.park2 .bayline { fill: none; stroke: var(--paint); stroke-width: 2; opacity: .85; vector-effect: non-scaling-stroke; }
+    svg.park2 .mark2 { opacity: .9; }
+    svg.park2 .tray2 { fill: none; stroke: #334155; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.park2 .lga2 { fill: none; stroke: #334155; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.park2 .cab2 { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.park2 .cab2.flow { stroke-dasharray: 2 9; animation: flow .7s linear infinite; }
+    svg.park2 .atag { opacity: .95; } svg.park2 .atagt { fill: #fff; font-weight: 800; font-family: system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    svg.park2 .plbl { fill: #fff; font-weight: 700; font-family: system-ui, sans-serif; paint-order: stroke; stroke: rgba(0,0,0,.6); stroke-linejoin: round; }
+    svg.park2 .plbl.soft { font-weight: 600; opacity: .85; }
+    svg.park2 .ped2, svg.park2 .cg2, svg.park2 .pcar2 { cursor: pointer; }
+    @media (prefers-reduced-motion: reduce) { svg.park2 .cab2.flow { animation: none; } svg.park2 .pcar2 { transition: none !important; } }
     .ttl { font-weight: 700; margin-bottom: 4px; }
     .tramos { margin: 0; padding-left: 22px; font-size: .84rem; } .tramos li { margin: 3px 0; }
     .tramos input { width: 84px; padding: 4px 6px; } .tramos select { width: auto; padding: 4px 6px; }
@@ -231,7 +251,7 @@
 </dialog>
 
 <script src="ocpp-virtual-charger.js?v=4nov7"></script>
-<script src="plano.js?v=4nov9"></script>
-<script src="site.js?v=4nov9"></script>
+<script src="plano.js?v=4nov10"></script>
+<script src="site.js?v=4nov10"></script>
 </body>
 </html>

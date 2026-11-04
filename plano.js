@@ -127,6 +127,7 @@
         tramos: [{ l: 40, t: 90 }, { l: 26, t: 90 }, { l: 24, t: 90 }, { l: 6, t: -90 }, { l: 16, t: 90 }, { l: 20, t: 0 }] },
       rows: [{ a: [3, 0], b: [38, 0] }, { a: [39.5, 26], b: [17, 26] }],
       board: [1.2, 1.2],
+      entrance: { wi: 4, s: 8, w: 4 },
       posts: { 0: [5.5, 0.4], 1: [10.5, 0.4], 2: [33, 0.4], 3: [25, 25.6] },
       lines: [
         { id: 'L1', amps: 80, mm2: 25, pts: [[1.2, 6], [10.5, 6]], chargers: [0, 1] },
@@ -146,6 +147,9 @@
     var SVGNS = 'http://www.w3.org/2000/svg', cfg = site.cfg, ES = site.ES;
     var T = ES ? {
       tabPark: 'Parking', tabPlan: 'Plano',
+      door: '🚪 Entrada', hDoor: 'Pincha en la pared por donde entran los coches (puerta de 4 m). Pincha en otra pared para moverla; con Borrar se quita.',
+      entr: 'Entrada', inOut: 'Entrada y salida', tripShort: 'ha saltado',
+      nDoor: 'Sin entrada: los coches aparecen directamente en su plaza (🚪 Entrada en la pestaña Plano)',
       move: '✋ Mover', outline: '✏️ Contorno', rows: '▥ Plazas', board: '▣ Cuadro', charger: '⚡ Cargador', line: '〰 Línea', erase: '✕ Borrar',
       hMove: 'Arrastra el cuadro o un cargador. Pincha una línea y arrastra sus puntos; el punto pequeño del medio de cada tramo crea una esquina nueva. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
       hOutline: 'Pincha las esquinas del garaje; para cerrar, pincha en la primera. Las medidas se corrigen abajo, tramo a tramo.',
@@ -173,6 +177,9 @@
       unplaced: 'Sin colocar: {n}', sbLines: 'El SB respeta también la protección de cada línea.'
     } : {
       tabPark: 'Car park', tabPlan: 'Plan',
+      door: '🚪 Entrance', hDoor: 'Click the wall where cars come in (a 4 m door). Click another wall to move it; Delete removes it.',
+      entr: 'Entrance', inOut: 'Way in and out', tripShort: 'tripped',
+      nDoor: 'No entrance: cars appear straight in their bay (🚪 Entrance in the Plan tab)',
       move: '✋ Move', outline: '✏️ Outline', rows: '▥ Bays', board: '▣ Main board', charger: '⚡ Charger', line: '〰 Line (cable)', erase: '✕ Delete',
       hMove: 'Drag the main board or a charger. Click a cable and drag its points; the small dot in the middle of each stretch makes a new corner. With the site on, click a charger to send a car (or make it leave).',
       hOutline: 'Click the corners of the garage; click the first one to close it. Fix the measurements below, stretch by stretch.',
@@ -204,7 +211,7 @@
     function esc(s) { return String(s).replace(/[<>&"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]; }); }
     function el(tag, attrs, parent) {
       var e = doc.createElementNS(SVGNS, tag);
-      if (tag === 'text' && attrs && /clab/.test(attrs['class'] || '')) attrs['stroke-width'] = r2(0.28 * U);
+      if (tag === 'text' && attrs && /clab|plbl/.test(attrs['class'] || '')) attrs['stroke-width'] = r2(0.28 * U);
       Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
       if (parent) parent.appendChild(e);
       return e;
@@ -230,7 +237,7 @@
     $('tab-plan').onclick = function () { showView('plan'); };
 
     // Tools
-    var TOOLS = ['move', 'outline', 'rows', 'board', 'charger', 'line', 'erase'];
+    var TOOLS = ['move', 'outline', 'rows', 'door', 'board', 'charger', 'line', 'erase'];
     $('plan-tools').innerHTML = TOOLS.map(function (k) { return '<button type="button" data-tool="' + k + '">' + T[k] + '</button>'; }).join('');
     Array.prototype.forEach.call($('plan-tools').querySelectorAll('button'), function (b) {
       b.onclick = function () { setTool(b.dataset.tool); };
@@ -243,9 +250,32 @@
       hint(); draw();
     }
     function nChargers() { return cfg.n; }
+    // The entrance: a gap in one wall of the outline (wall index, distance along it to the middle, width)
+    function inside(p, poly) {
+      var c = false;
+      for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        var a = poly[i], b = poly[j];
+        if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+      }
+      return c;
+    }
+    function wallNearest(p) {
+      var op = outlinePoints(plan.outline), best = null;
+      for (var i = 1; i < op.length; i++) { var pr = project([op[i - 1], op[i]], p); if (!best || pr.d < best.d) best = { wi: i - 1, s: pr.s, d: pr.d }; }
+      return best;
+    }
+    function entrance() {
+      var e = plan.entrance; if (!e) return null;
+      var op = outlinePoints(plan.outline), a = op[e.wi], b = op[e.wi + 1]; if (!a || !b) return null;
+      var L = dist(a, b); if (L < 1) return null;
+      var w = Math.min(e.w || 4, L), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, sm = Math.max(w / 2, Math.min(L - w / 2, e.s));
+      var c = [a[0] + ux * sm, a[1] + uy * sm], nx = -uy, ny = ux;
+      if (!inside([c[0] + nx * 0.5, c[1] + ny * 0.5], op)) { nx = -nx; ny = -ny; }
+      return { c: c, u: [ux, uy], n: [nx, ny], w: w, a: [c[0] - ux * w / 2, c[1] - uy * w / 2], b: [c[0] + ux * w / 2, c[1] + uy * w / 2] };
+    }
     function unplaced() { var u = []; for (var i = 0; i < nChargers(); i++) if (!plan.posts[i]) u.push(i); return u; }
     function hint() {
-      var h = tool === 'move' ? T.hMove : tool === 'outline' ? T.hOutline : tool === 'rows' ? T.hRows : tool === 'board' ? T.hBoard
+      var h = tool === 'move' ? T.hMove : tool === 'outline' ? T.hOutline : tool === 'rows' ? T.hRows : tool === 'door' ? T.hDoor : tool === 'board' ? T.hBoard
         : tool === 'charger' ? (unplaced().length ? T.hCharger + t('unplaced', { n: unplaced().map(function (i) { return cfg.chargers[i].name; }).join(', ') }) : T.hAllPlaced)
         : tool === 'line' ? (plan.board ? T.hLine : T.hNoBoard) : T.hErase;
       $('plan-hint').textContent = h;
@@ -325,6 +355,14 @@
         });
         el('circle', { cx: pts[0][0], cy: pts[0][1], r: r2(0.5 * U), class: 'start' }, svg);
       }
+      // Entrance: a gap in the wall and an arrow in
+      var en = entrance();
+      if (en) {
+        el('line', { x1: r2(en.a[0]), y1: r2(en.a[1]), x2: r2(en.b[0]), y2: r2(en.b[1]), class: 'door' }, svg);
+        [en.a, en.b].forEach(function (q) { el('line', { x1: r2(q[0] - en.n[0] * 0.5), y1: r2(q[1] - en.n[1] * 0.5), x2: r2(q[0] + en.n[0] * 0.5), y2: r2(q[1] + en.n[1] * 0.5), class: 'jamb' }, svg); });
+        arrowIn(en, svg, 'doorarrow');
+        el('text', { x: r2(en.c[0] + en.n[0] * (3 + 2.2 * U)), y: r2(en.c[1] + en.n[1] * (3 + 1.6 * U) + 0.4 * U), 'text-anchor': 'middle', 'font-size': r2(1.15 * U), class: 'clab' }, svg).textContent = T.entr;   // inside: the wall's measurement is outside
+      }
       // Bays
       plan.rows.forEach(function (r, ri) {
         var L = dist(r.a, r.b), ux = (r.b[0] - r.a[0]) / (L || 1), uy = (r.b[1] - r.a[1]) / (L || 1);
@@ -352,7 +390,7 @@
         });
         var lab = l.pts.length ? l.pts[l.pts.length - 1] : plan.board;
         if (r && r.taps.length) el('text', { x: r2(lab[0] + off + 0.8 * U), y: r2(lab[1] + off - 0.8 * U), class: 'clab', 'font-size': r2(1.3 * U), fill: col }, svg)
-          .textContent = l.id + ' · ' + fmt(r.pct, 1) + ' %';
+          .textContent = l.id + ' · ' + fmt(r.amps, 1) + ' / ' + l.amps + ' A · ' + fmt(r.pct, 1) + ' %';
       });
       // Handles of the picked cable: its corners, and a small dot in the middle of each stretch to add one
       handles().forEach(function (h) {
@@ -401,6 +439,12 @@
       hint();
     }
 
+    function arrowIn(en, parent, cls) {
+      var t0 = [en.c[0] + en.n[0] * 0.6, en.c[1] + en.n[1] * 0.6], t1 = [en.c[0] + en.n[0] * 3, en.c[1] + en.n[1] * 3], hw = 0.7;
+      el('polyline', { points: [t0, t1].map(function (q) { return r2(q[0]) + ',' + r2(q[1]); }).join(' '), class: cls }, parent);
+      el('polyline', { points: [[t1[0] - en.n[0] * 0.9 + en.u[0] * hw, t1[1] - en.n[1] * 0.9 + en.u[1] * hw], t1, [t1[0] - en.n[0] * 0.9 - en.u[0] * hw, t1[1] - en.n[1] * 0.9 - en.u[1] * hw]]
+        .map(function (q) { return r2(q[0]) + ',' + r2(q[1]); }).join(' '), class: cls }, parent);
+    }
     function removeLine(id) {
       plan.lines = plan.lines.filter(function (l) { return l.id !== id; });
       if (selLine === id) selLine = plan.lines.length ? plan.lines[0].id : null;
@@ -442,6 +486,7 @@
         if (pr.d < 0.9 * U && pr.d < bd) { bd = pr.d; best = { kind: 'line', id: plan.lines[i].id }; }
       }
       if (best) return best;
+      var en = entrance(); if (en && dist(en.c, p) < Math.max(en.w / 2, 1.5 * U)) return { kind: 'door' };
       for (var ri = plan.rows.length - 1; ri >= 0; ri--) {
         var g = rowBays(plan.rows[ri]), dx = p[0] - plan.rows[ri].a[0], dy = p[1] - plan.rows[ri].a[1];
         var along = dx * g.ux + dy * g.uy, across = dx * g.nx + dy * g.ny;
@@ -541,6 +586,11 @@
         save(); draw(); tramosPanel(); return;
       }
       if (tool === 'rows') { if (hit && hit.kind === 'line') { selLine = hit.id; draw(); sidePanel(); return; } if (hit && hit.kind === 'row') { plan.rows[hit.ri].flip = !plan.rows[hit.ri].flip; save(); draw(); } return; }
+      if (tool === 'door') {
+        var wn = wallNearest(p);
+        if (wn) { plan.entrance = { wi: wn.wi, s: r2(wn.s), w: (plan.entrance && plan.entrance.w) || 4 }; save(); draw(); }
+        return;
+      }
       if (tool === 'board') { plan.board = snapFrom(null, p); save(); draw(); sidePanel(); return; }
       if (tool === 'charger') {
         var u = unplaced(); if (u.length) { plan.posts[u[0]] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; save(); draw(); sidePanel(); }
@@ -548,7 +598,8 @@
       }
       if (tool === 'erase') {
         if (!hit) return;
-        if (hit.kind === 'board') plan.board = null;
+        if (hit.kind === 'door') plan.entrance = null;
+        else if (hit.kind === 'board') plan.board = null;
         else if (hit.kind === 'charger') { delete plan.posts[hit.ci]; plan.lines.forEach(function (l) { l.chargers = l.chargers.filter(function (x) { return x !== hit.ci; }); }); }
         else if (hit.kind === 'line') { removeLine(hit.id); return; }
         else if (hit.kind === 'vertex') { var lv = plan.lines.filter(function (x) { return x.id === hit.id; })[0]; if (lv) lv.pts.splice(hit.i, 1); }
@@ -734,11 +785,74 @@
       if (!g || g.d >= 0.05) return t('nGap', { d: fmt(g ? g.d : 0, 2) });
       var miss = [];
       if (!plan.rows.length) miss.push(T.nRows);
+      if (!entrance()) miss.push(T.nDoor);
       var u = unplaced(); if (u.length) miss.push(t('nPosts', { n: u.map(function (i) { return cfg.chargers[i].name; }).join(', ') }));
       return miss.join(' · ');
     }
     var STATUS = { Available: 'var(--av)', Charging: 'var(--chg)', Preparing: 'var(--wait)', Finishing: 'var(--wait)', SuspendedEV: 'var(--wait)',
                    SuspendedEVSE: 'var(--wait)', Faulted: 'var(--bad)', Unavailable: 'var(--off)', Reserved: 'var(--in)' };
+    var lastCut = false, parkCars = {};
+    function pts2(a) { return a.map(function (q) { return r2(q[0]) + ',' + r2(q[1]); }).join(' '); }
+    // Car seen from above, 4.4 × 1.8 m, nose to -y (same drawing as the sample car park, scaled to metres)
+    function carShape2(color) {
+      var g = doc.createElementNS(SVGNS, 'g'), s = el('g', { transform: 'scale(0.0333)' }, g);
+      el('rect', { x: -27, y: -66, width: 54, height: 132, rx: 16, fill: color, stroke: 'rgba(0,0,0,.45)', 'stroke-width': 2 }, s);
+      el('path', { d: 'M-21 -36 Q0 -50 21 -36 L19 -18 L-19 -18 Z', fill: '#0f172a', opacity: .8 }, s);
+      el('rect', { x: -19, y: -13, width: 38, height: 50, rx: 6, fill: 'rgba(0,0,0,.18)' }, s);
+      el('path', { d: 'M-19 44 L19 44 L17 56 L-17 56 Z', fill: '#0f172a', opacity: .7 }, s);
+      el('rect', { x: -14, y: 4, width: 28, height: 10, rx: 3, fill: 'rgba(15,23,42,.8)' }, s);
+      el('rect', { x: -12, y: 6, width: 0, height: 6, rx: 2, fill: '#4ade80', class: 'soc' }, s);
+      g.setAttribute('class', 'pcar2');
+      return g;
+    }
+    function heading(d) { return Math.atan2(d[0], -d[1]) * 180 / Math.PI; }
+    function putCar(pc, p, ang, ms) {
+      pc.el.style.transition = ms ? 'transform ' + ms + 'ms cubic-bezier(.45,.05,.35,1)' : 'none';
+      pc.el.style.transform = 'translate(' + r2(p[0]) + 'px,' + r2(p[1]) + 'px) rotate(' + r2(ang) + 'deg)';
+      pc.at = p; pc.ang = ang;
+    }
+    // A car's trip: from outside the entrance, through it, to the lane in front of its bay, and nose in. Leaving, the reverse.
+    function route(b, en) {
+      var lane = [b.c[0] + b.n[0] * 5.2, b.c[1] + b.n[1] * 5.2];
+      return { out: [en.c[0] - en.n[0] * 4, en.c[1] - en.n[1] * 4], door: [en.c[0] + en.n[0] * 3, en.c[1] + en.n[1] * 3], lane: lane, bay: b.c };
+    }
+    function moveCars(hb, en, gCars) {
+      var cars = site.bays(), seen = {};
+      Object.keys(cars).forEach(function (k) {
+        var car = cars[k], b = hb.hose[k]; if (!b) return;
+        seen[k] = true;
+        var pc = parkCars[k];
+        if (pc && pc.car !== car) { pc.el.remove(); pc = null; }
+        var park = heading([-b.n[0], -b.n[1]]);
+        if (!pc) {
+          pc = parkCars[k] = { car: car, el: carShape2(car.model.color), state: 'new' };
+          gCars.appendChild(pc.el);
+          if (en && car.phase === 'in') {
+            var r = route(b, en);
+            putCar(pc, r.out, heading(en.n), 0);
+            pc.el.getBoundingClientRect();
+            pc.state = 'arriving';
+            setTimeout(function () { putCar(pc, r.door, heading(en.n), 900); }, 30);
+            setTimeout(function () { putCar(pc, r.lane, heading([r.lane[0] - r.door[0], r.lane[1] - r.door[1]]), 1400); }, 950);
+            setTimeout(function () { putCar(pc, r.bay, park, 1300); pc.state = 'parked'; }, 2400);
+          } else { putCar(pc, b.c, park, 0); pc.state = 'parked'; }
+        } else if (gCars !== pc.el.parentNode) gCars.appendChild(pc.el);
+        if (car.phase === 'out' && pc.state !== 'leaving') {
+          pc.state = 'leaving';
+          if (en) {
+            var r2_ = route(b, en);
+            putCar(pc, r2_.lane, park, 1300);
+            setTimeout(function () { putCar(pc, r2_.door, heading([en.c[0] - r2_.lane[0], en.c[1] - r2_.lane[1]]), 1400); }, 1350);
+            setTimeout(function () { putCar(pc, r2_.out, heading([-en.n[0], -en.n[1]]), 900); }, 2800);
+            setTimeout(function () { pc.el.remove(); }, 3800);
+          } else setTimeout(function () { pc.el.remove(); }, 1200);
+        } else if (pc.state === 'parked' && (!pc.at || dist(pc.at, b.c) > 0.01)) putCar(pc, b.c, park, 0);   // the plan changed
+        var live = site.live()[car.ci], c = live ? live.charger.state.connectors[car.hose - 1] : null, bar = pc.el.querySelector('.soc');
+        if (bar && c && c.car && c.car.soc != null) bar.setAttribute('width', String(r2(24 * c.car.soc / 100)));
+      });
+      Object.keys(parkCars).forEach(function (k) { if (!seen[k] && parkCars[k].state !== 'leaving') { parkCars[k].el.remove(); delete parkCars[k]; } else if (!seen[k]) delete parkCars[k]; });
+    }
+    var gBase = null, gCarsP = null, gTop = null;
     function drawPark() {
       var ready = planReady();
       // SVG elements have no .hidden property: the attribute has to be set by hand
@@ -747,15 +861,77 @@
       $('park-notice').className = ready ? 'small' : 'trip';   // missing bits are a hint; an outline that does not close is the reason
       if (!ready || view !== 'park') return;
       var keep = svg; svg = parkSvg; fit(); svg = keep;
-      parkSvg.innerHTML = '';
-      var pts = outlinePoints(plan.outline), hb = hoseBays(), live = site.live(), cars = site.bays();
-      el('polygon', { points: pts.map(function (p) { return p.join(','); }).join(' '), class: 'wall' }, parkSvg);
-      Object.keys(hb.hose).forEach(function (k) { var vb2 = hb.hose[k]; if (vb2.virtual) el('polygon', { points: vb2.q.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' '), class: 'pbay' }, parkSvg); });
-      hb.bays.forEach(function (b) { el('polygon', { points: b.q.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' '), class: 'pbay' }, parkSvg); });
-      if (plan.board) {
-        el('rect', { x: r2(plan.board[0] - 1.1 * U), y: r2(plan.board[1] - 1.1 * U), width: r2(2.2 * U), height: r2(2.2 * U), rx: r2(0.3 * U), class: 'boardbox' }, parkSvg);
-        el('text', { x: plan.board[0], y: r2(plan.board[1] + 0.45 * U), 'text-anchor': 'middle', 'font-size': r2(1.1 * U), class: 'boardtxt' }, parkSvg).textContent = 'CG';
+      parkSvg.setAttribute('class', 'plan park2');
+      if (!gBase || gBase.parentNode !== parkSvg) {
+        parkSvg.innerHTML = '';
+        gBase = el('g', {}, parkSvg); gCarsP = el('g', {}, parkSvg); gTop = el('g', {}, parkSvg); parkCars = {};
       }
+      gBase.innerHTML = ''; gTop.innerHTML = '';
+      var pts = outlinePoints(plan.outline), hb = hoseBays(), live = site.live(), cars = site.bays(), en = entrance(), now = Date.now();
+      var res = plan.board ? calcAll() : {};
+      // Floor and walls
+      el('polygon', { points: pts2(pts), class: 'floor' }, gBase);
+      if (en) {
+        el('line', { x1: r2(en.a[0]), y1: r2(en.a[1]), x2: r2(en.b[0]), y2: r2(en.b[1]), class: 'door2' }, gBase);
+        el('polygon', { points: pts2([en.a, en.b, [en.b[0] - en.n[0] * 3, en.b[1] - en.n[1] * 3], [en.a[0] - en.n[0] * 3, en.a[1] - en.n[1] * 3]]), class: 'ramp' }, gBase);
+        arrowIn(en, gBase, 'doorarrow2');
+        var lx = en.c[0] - en.n[0] * 4.2, ly = en.c[1] - en.n[1] * 4.2;
+        el('text', { x: r2(lx), y: r2(ly + 0.4 * U), 'text-anchor': 'middle', 'font-size': r2(1.2 * U), class: 'plbl' }, gTop).textContent = T.inOut;
+      }
+      // Bays: painted side lines, and the EV marking in the colour of the hose's status
+      var allBays = hb.bays.slice(); Object.keys(hb.hose).forEach(function (k) { if (hb.hose[k].virtual) allBays.push(hb.hose[k]); });
+      allBays.forEach(function (b) { el('polyline', { points: pts2([b.q[3], b.q[0], b.q[1], b.q[2]]), class: 'bayline' }, gBase); });
+      // Cables: the tray, then each cable with its current (thicker and moving when it carries current) and a tag with its amps
+      var tags = [];
+      plan.lines.forEach(function (l, li) {
+        if (!plan.board) return;
+        var r = res[l.id], off = (li - (plan.lines.length - 1) / 2) * 0.35, rt = runtime[l.id] || {}, cut = rt.tripUntil > now;
+        var route2 = [plan.board].concat(l.pts).map(function (q) { return [q[0] + off, q[1] + off]; });
+        el('polyline', { points: pts2(route2), class: 'tray2' }, gBase);
+        var a = r ? r.amps : 0, col = cut ? 'var(--bad)' : a > l.amps + 0.05 ? 'var(--bad)' : a > 0.05 ? 'var(--chg)' : 'var(--off)';
+        var w = a > 0.05 ? Math.min(7, 2 + a / 12) : 1.5;
+        el('polyline', { points: pts2(route2), class: 'cab2' + (a > 0.05 && !cut ? ' flow' : ''), stroke: col, 'stroke-width': r2(w) }, gBase);
+        if (r) r.taps.forEach(function (tp) {
+          el('line', { x1: r2(tp.at[0] + off), y1: r2(tp.at[1] + off), x2: plan.posts[tp.ci][0], y2: plan.posts[tp.ci][1], class: 'cab2' + (tp.I > 0.05 && !cut ? ' flow' : ''), stroke: col, 'stroke-width': r2(tp.I > 0.05 ? Math.min(5, 1.5 + tp.I / 12) : 1.2) }, gBase);
+        });
+        // The tag goes on the cable, on the longest stretches first, where it does not cover another cable's tag
+        var tag = l.id + ' · ' + (cut ? T.tripShort : fmt(a, 1) + ' / ' + l.amps + ' A');
+        var tw = tag.length * 0.62 * U + 1.2 * U, th = 1.9 * U, cand = [];
+        for (var i = 1; i < route2.length; i++) {
+          var d = dist(route2[i - 1], route2[i]);
+          [0.5, 0.3, 0.7, 0.15, 0.85].forEach(function (f, fi) { cand.push({ k: d * (1 - fi * 0.08), p: [route2[i - 1][0] + (route2[i][0] - route2[i - 1][0]) * f, route2[i - 1][1] + (route2[i][1] - route2[i - 1][1]) * f] }); });
+        }
+        cand.sort(function (x, y) { return y.k - x.k; });
+        var clear = function (q) { return tags.every(function (o) { return Math.abs(o[0] - q[0]) > (o[2] + tw) / 2 + 0.2 || Math.abs(o[1] - q[1]) > th + 0.1; }); };
+        var m = (cand.filter(function (c0) { return clear(c0.p); })[0] || cand[0] || { p: plan.board }).p;
+        tags.push([m[0], m[1], tw]);
+        el('rect', { x: r2(m[0] - tw / 2), y: r2(m[1] - 0.95 * U), width: r2(tw), height: r2(1.9 * U), rx: r2(0.5 * U), class: 'atag', fill: col }, gTop);
+        el('text', { x: r2(m[0]), y: r2(m[1] + 0.42 * U), 'text-anchor': 'middle', 'font-size': r2(1.15 * U), class: 'atagt' }, gTop).textContent = tag;
+      });
+      // Main board where the LGA comes in, its breaker and the SB when there is one
+      if (plan.board) {
+        var wn = wallNearest(plan.board), op = outlinePoints(plan.outline);
+        if (wn) {
+          var wa = op[wn.wi], wb = op[wn.wi + 1], wl = dist(wa, wb) || 1, wpt = [wa[0] + (wb[0] - wa[0]) * wn.s / wl, wa[1] + (wb[1] - wa[1]) * wn.s / wl];
+          var vx = wpt[0] - plan.board[0], vy = wpt[1] - plan.board[1], vl = Math.hypot(vx, vy);
+          var ox = vl > 0.01 ? vx / vl : -(wb[1] - wa[1]) / wl, oy = vl > 0.01 ? vy / vl : (wb[0] - wa[0]) / wl;
+          if (inside([wpt[0] + ox * 0.5, wpt[1] + oy * 0.5], op)) { ox = -ox; oy = -oy; }
+          var street = [wpt[0] + ox * 3, wpt[1] + oy * 3], chg = live.reduce(function (s2, p2) { return s2 + (p2 ? p2.charger.state.totalKw || 0 : 0); }, 0);
+          el('polyline', { points: pts2([plan.board, wpt, street]), class: 'lga2' }, gBase);
+          el('polyline', { points: pts2([street, wpt, plan.board]), class: 'cab2' + (chg > 0.05 && !lastCut ? ' flow' : ''), stroke: 'var(--wait)', 'stroke-width': r2(chg > 0.05 ? Math.min(8, 2 + chg / 6) : 1.5) }, gBase);
+          el('text', { x: r2(street[0] + ox * 0.8 * U), y: r2(street[1] + oy * 0.8 * U + 0.4 * U), 'text-anchor': ox > 0.5 ? 'start' : ox < -0.5 ? 'end' : 'middle', 'font-size': r2(1.15 * U), class: 'plbl' }, gTop)
+            .textContent = 'LGA ' + (cfg.phases === 3 ? '3×' : '1×') + cfg.amps + ' A · ' + fmt(cfg.grid, 1) + ' kW';
+        }
+        var cg = el('g', { class: 'cg2' }, gTop);
+        el('rect', { x: r2(plan.board[0] - 0.9), y: r2(plan.board[1] - 0.9), width: 1.8, height: 1.8, rx: 0.25, fill: '#1e293b', stroke: '#0b1220', 'stroke-width': 0.08 }, cg);
+        el('circle', { cx: plan.board[0], cy: r2(plan.board[1] - 0.25), r: 0.4, fill: lastCut ? 'var(--bad)' : 'var(--av)' }, cg);
+        el('text', { x: plan.board[0], y: r2(plan.board[1] + 0.65), 'text-anchor': 'middle', 'font-size': 0.6, class: 'boardtxt' }, cg).textContent = 'CG';
+        if (cfg.sb) {
+          el('rect', { x: r2(plan.board[0] + 1.1), y: r2(plan.board[1] - 0.9), width: 1.8, height: 1.8, rx: 0.25, fill: '#7c3aed', stroke: '#0b1220', 'stroke-width': 0.08 }, cg);
+          el('text', { x: r2(plan.board[0] + 2), y: r2(plan.board[1] + 0.25), 'text-anchor': 'middle', 'font-size': 0.7, class: 'boardtxt' }, cg).textContent = 'SB';
+        }
+      }
+      // Chargers and hoses
       for (var ci = 0; ci < nChargers(); ci++) {
         var post = plan.posts[ci]; if (!post) continue;
         var s = live[ci] ? live[ci].charger.state : null;
@@ -763,32 +939,37 @@
           var b = hb.hose[ci + ':' + h], c = s ? s.connectors[h - 1] : null, car = cars[ci + ':' + h];
           var st = !s || !s.connected || s.powerOff ? null : c && c.status;
           if (!b) continue;
-          // Bay marking in the colour of the connector status
-          el('polygon', { points: b.q.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' '), class: 'bayst', fill: st ? STATUS[st] || 'var(--off)' : 'transparent' }, parkSvg);
-          if (car && car.phase !== 'out') {
-            var ang = Math.atan2(b.n[1], b.n[0]) * 180 / Math.PI, g = el('g', { transform: 'translate(' + r2(b.c[0]) + ' ' + r2(b.c[1]) + ') rotate(' + r2(ang) + ')', class: 'pcar' }, parkSvg);
-            el('rect', { x: -2.2, y: -0.9, width: 4.4, height: 1.8, rx: 0.5, fill: car.model.color, class: 'carbody' }, g);
-            el('rect', { x: -0.9, y: -0.75, width: 1.8, height: 1.5, rx: 0.3, fill: 'rgba(0,0,0,.25)' }, g);
-            el('rect', { x: -1.75, y: -0.8, width: 0.55, height: 1.6, rx: 0.15, fill: '#0f172a', opacity: .75 }, g);   // windscreen, towards the wall
-            var soc = c && c.car ? c.car.soc : null;
-            if (soc != null) { el('rect', { x: 0.2, y: -0.35, width: 1.6, height: 0.7, rx: 0.12, fill: 'rgba(15,23,42,.8)' }, g);
-                               el('rect', { x: 0.28, y: -0.25, width: r2(1.44 * soc / 100), height: 0.5, rx: 0.08, fill: '#4ade80' }, g); }
-            if (c && c.plugged) el('line', { x1: post[0], y1: post[1], x2: r2(b.c[0] - b.n[0] * 2.2), y2: r2(b.c[1] - b.n[1] * 2.2), class: 'hose2' + (c.powerKw > 0 ? ' flow' : ''), stroke: STATUS[c.status] || 'var(--off)' }, parkSvg);
+          var mk = [b.c[0] + b.n[0] * 1.7, b.c[1] + b.n[1] * 1.7], ux = -b.n[1], uy = b.n[0];
+          el('polygon', { points: pts2([[mk[0] - ux * 0.8 - b.n[0] * 0.35, mk[1] - uy * 0.8 - b.n[1] * 0.35], [mk[0] + ux * 0.8 - b.n[0] * 0.35, mk[1] + uy * 0.8 - b.n[1] * 0.35],
+                                         [mk[0] + ux * 0.8 + b.n[0] * 0.35, mk[1] + uy * 0.8 + b.n[1] * 0.35], [mk[0] - ux * 0.8 + b.n[0] * 0.35, mk[1] - uy * 0.8 + b.n[1] * 0.35]]),
+                        class: 'mark2', fill: st ? STATUS[st] || 'var(--off)' : 'var(--off)' }, gBase);
+          var pc = parkCars[ci + ':' + h];
+          if (car && car.phase === 'parked' && c && c.plugged && pc && pc.state === 'parked')
+            el('line', { x1: post[0], y1: post[1], x2: r2(b.c[0] - b.n[0] * 1.6), y2: r2(b.c[1] - b.n[1] * 1.6), class: 'hose2' + (c.powerKw > 0 ? ' flow' : ''), stroke: STATUS[c.status] || 'var(--off)' }, gTop);
+          var l1 = c && c.powerKw > 0 ? fmt(c.powerKw, 1) + ' kW' : c && c.status === 'SuspendedEV' ? (ES ? 'lleno' : 'full') : c && c.status === 'SuspendedEVSE' ? (ES ? 'pausa' : 'paused') : '';
+          var l2 = c && c.car && (c.powerKw > 0 || c.status === 'SuspendedEV') ? Math.floor(c.car.soc) + ' %' : '';
+          if (l1 && pc && pc.state === 'parked') {
+            var tx = el('text', { x: r2(b.c[0]), y: r2(b.c[1] - 0.15 * U), 'text-anchor': 'middle', 'font-size': r2(0.8 * U), class: 'plbl' }, gTop);
+            tx.textContent = l1;
+            if (l2) el('text', { x: r2(b.c[0]), y: r2(b.c[1] + 0.9 * U), 'text-anchor': 'middle', 'font-size': r2(0.8 * U), class: 'plbl' }, gTop).textContent = l2;
           }
-          var lbl = c && c.powerKw > 0 ? fmt(c.powerKw, 1) + ' kW · ' + Math.floor(c.car ? c.car.soc : 0) + ' %'
-                  : c && c.status === 'SuspendedEV' ? (ES ? 'lleno' : 'full') : '';
-          if (lbl) el('text', { x: r2(b.c[0] + b.n[0] * 3.3), y: r2(b.c[1] + b.n[1] * 3.3 + 0.4 * U), 'text-anchor': 'middle', 'font-size': r2(1.05 * U), class: 'clab' }, parkSvg).textContent = lbl;
         }
         var col = !s ? 'var(--off)' : s.powerOff || s.gaveUp ? 'var(--bad)' : !s.connected ? 'var(--off)' : s.totalKw > 0 ? 'var(--chg)' : 'var(--av)';
-        el('rect', { x: r2(post[0] - 1.2 * U), y: r2(post[1] - 0.8 * U), width: r2(2.4 * U), height: r2(1.6 * U), rx: r2(0.35 * U), fill: col, class: 'post' }, parkSvg);
-        var below = post[1] < (vb.y + vb.h / 2);
-        el('text', { x: post[0], y: r2(post[1] + (below ? -1.3 : 2.4) * U), 'text-anchor': 'middle', 'font-size': r2(1.1 * U), class: 'clab' }, parkSvg).textContent = cfg.chargers[ci].name;
+        var pg = el('g', { class: 'ped2' }, gTop);
+        el('rect', { x: r2(post[0] - 0.6), y: r2(post[1] - 0.45), width: 1.2, height: 0.9, rx: 0.18, fill: '#1e293b', stroke: '#0b1220', 'stroke-width': 0.06 }, pg);
+        el('circle', { cx: post[0], cy: post[1], r: 0.24, fill: col, class: s && s.totalKw > 0 ? 'led-chg' : '' }, pg);
+        var below = post[1] < (vb.y + vb.h / 2), kw = cfg.chargers[ci].kw;
+        var y1 = below ? post[1] - 2.1 * U : post[1] + 1.9 * U, y2 = below ? post[1] - 1.0 * U : post[1] + 3.0 * U;
+        el('text', { x: post[0], y: r2(y1), 'text-anchor': 'middle', 'font-size': r2(0.95 * U), class: 'plbl' }, gTop).textContent = cfg.chargers[ci].name;
+        el('text', { x: post[0], y: r2(y2), 'text-anchor': 'middle', 'font-size': r2(0.85 * U), class: 'plbl soft' }, gTop).textContent = fmt(kw, kw % 1 ? 1 : 0) + ' kW';
       }
+      moveCars(hb, en, gCarsP);
     }
     function parkHit(ev) {
       var pt = parkSvg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
       var p = pt.matrixTransform(parkSvg.getScreenCTM().inverse()), q = [p.x, p.y], hb = hoseBays(), cars = site.bays();
       for (var ci = 0; ci < nChargers(); ci++) if (plan.posts[ci] && dist(plan.posts[ci], q) < 1.6 * U) { site.openDialog(ci); return; }
+      if (plan.board && site.openLga && dist(plan.board, q) < 1.6 * U) { site.openLga(); return; }
       // Only the bay under the click (they are 2.5 m wide: one click must not reach the next one)
       var k = Object.keys(hb.hose).sort(function (x, y) { return dist(hb.hose[x].c, q) - dist(hb.hose[y].c, q); })[0];
       if (!k || dist(hb.hose[k].c, q) > 2.4) return;
@@ -801,6 +982,7 @@
     site.lineFor = function (ci) { var l = plan.board ? lineOf(ci) : null; return l ? l.id : null; };
     site.lineCaps = function () { var c = {}; plan.lines.forEach(function (l) { c[l.id] = l.amps; }); return c; };
     site.onTick = function (now, cut) {
+      lastCut = !!cut;
       if (site.running() && plan.board) {
         var res = calcAll(), live = site.live();
         plan.lines.forEach(function (l) {
