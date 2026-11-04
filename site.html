@@ -88,6 +88,8 @@
     svg.plan .post.insel { stroke: var(--in); stroke-width: 3; }
     svg.plan .handle { fill: var(--card); stroke: var(--in); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
     svg.plan .handle.mid { fill: var(--in); opacity: .7; cursor: copy; }
+    svg.plan .bayst { opacity: .28; } svg.plan .pcar { cursor: pointer; } svg.plan .carbody { stroke: rgba(0,0,0,.45); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    svg.plan .hose2 { stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke; } svg.plan .hose2.flow { stroke-dasharray: 2 7; animation: flow .7s linear infinite; }
     svg.plan .boardbox { fill: #1e293b; } svg.plan .boardtxt { fill: #fff; font-weight: 800; font-family: system-ui, sans-serif; }
     .ttl { font-weight: 700; margin-bottom: 4px; }
     .tramos { margin: 0; padding-left: 22px; font-size: .84rem; } .tramos li { margin: 3px 0; }
@@ -130,7 +132,9 @@
     <div class="card" style="padding:10px">
       <div id="park-view">
         <svg id="park" class="park" aria-label="Car park"></svg>
-        <div class="small" style="margin-top:6px" data-t="parkHelp">Click a charger to name it and set its power · click an empty bay to send a car · click a car to make it leave.</div>
+        <svg id="park-plan" class="plan" aria-label="Car park" hidden></svg>
+        <div class="small" style="margin-top:6px" id="park-plan-help" data-t="parkPlanHelp" hidden>Your car park from the Plan tab. Click a charger to name it and set its power · click an empty bay next to a charger to send a car · click a car to make it leave.</div>
+        <div class="small" style="margin-top:6px" id="park-help" data-t="parkHelp">Click a charger to name it and set its power · click an empty bay to send a car · click a car to make it leave.</div>
       </div>
       <div id="plan-view" hidden>
         <div class="pbar">
@@ -225,8 +229,8 @@
   </form>
 </dialog>
 
-<script src="ocpp-virtual-charger.js?v=4nov5"></script>
-<script src="plano.js?v=4nov5"></script>
-<script src="site.js?v=4nov5"></script>
+<script src="ocpp-virtual-charger.js?v=4nov6"></script>
+<script src="plano.js?v=4nov6"></script>
+<script src="site.js?v=4nov6"></script>
 </body>
 </html>

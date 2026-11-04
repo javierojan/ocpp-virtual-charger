@@ -17,6 +17,7 @@
     addrHelp: 'Desde el navegador los cargadores conectan sin contraseña (un navegador no puede mandar Basic Auth). ¿Sin CSMS?',
     useTest: 'Usar el servidor de pruebas gratuito de askacharge.com', watch: 'ver lo que recibe →',
     parkHelp: 'Pincha en un cargador para ponerle nombre y potencia · en una plaza libre para mandar un coche · en un coche para que se vaya.',
+    parkPlanHelp: 'Tu parking de la pestaña Plano. Pincha en un cargador para ponerle nombre y potencia · en una plaza libre junto a un cargador para mandar un coche · en un coche para que se vaya.',
     draw: 'Consumo de la LGA', lgChg: 'cargadores', lgTot: 'con el edificio', lgLim: 'LGA', lgWin: '10 min', more: 'Más ajustes',
     baseKw: 'Edificio: consumo habitual (kW)', peaksLbl: 'Edificio: picos de consumo (ascensor, calefacción, cocina)',
     peaksSome: 'de vez en cuando', peaksMany: 'a menudo',
@@ -507,7 +508,7 @@
   $('logf').onchange = function () { $('log').textContent = ''; };
   // What the plan view (plano.js) needs from the site
   var site = { cfg: cfg, ES: ES, save: save, live: function () { return live; }, running: function () { return running; },
-               bays: function () { return bays; }, arrive: arrive, leave: leave, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
+               bays: function () { return bays; }, arrive: arrive, leave: leave, openDialog: openDialog, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
   if (window.OvcPlano) window.OvcPlano.mount(site);
   lgaButton();
   layout();

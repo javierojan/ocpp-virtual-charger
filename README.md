@@ -54,7 +54,7 @@ board and the chargers, and draw the **cables** from the main board along their 
 cross-section; drag a cable's corners to reroute it, or the dot in the middle of a stretch to add a corner. Every cable shows its current and an approximate **voltage drop** (copper, γ = 48, cos φ = 1, each
 charger at its point on the cable; 5 % limit from the origin of the circuit to the charging point, as in Spain's
 ITC-BT-52), the local balancer keeps every cable under its breaker, and a cable overloaded for longer than the main
-breaker setting trips and its chargers lose power. Plans save and load as JSON (`"format": "ocpp-virtual-charger/plan"`).
+breaker setting trips and its chargers lose power. Once the outline closes and there are bays and chargers, the *Car park* tab shows your garage live, each hose parking its cars in the nearest bay. Plans save and load as JSON (`"format": "ocpp-virtual-charger/plan"`).
 It is a simulator: for a real project, use a proper electrical design tool.
 
 From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
