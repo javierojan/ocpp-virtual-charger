@@ -428,10 +428,12 @@
       var tol = 1.6 * U, best = null, bd = Infinity;
       for (var ci = 0; ci < nChargers(); ci++) { var q = plan.posts[ci]; if (q && dist(q, p) < tol && dist(q, p) < bd) { bd = dist(q, p); best = { kind: 'charger', ci: ci }; } }
       if (plan.board && dist(plan.board, p) < tol && dist(plan.board, p) < bd) { bd = dist(plan.board, p); best = { kind: 'board' }; }
-      if (best) return best;
+      // A cable wins over a charger or the board when the click is closer to it, unless the click is on the box itself
       if (plan.board) for (var i = plan.lines.length - 1; i >= 0; i--) {
-        var pr = project([plan.board].concat(plan.lines[i].pts), p); if (pr.d < 0.9 * U) return { kind: 'line', id: plan.lines[i].id };
+        var pr = project([plan.board].concat(plan.lines[i].pts), p);
+        if (pr.d < 0.9 * U && pr.d < bd && !(best && bd < 0.8 * U)) { bd = pr.d; best = { kind: 'line', id: plan.lines[i].id }; }
       }
+      if (best) return best;
       for (var ri = plan.rows.length - 1; ri >= 0; ri--) {
         var g = rowBays(plan.rows[ri]), dx = p[0] - plan.rows[ri].a[0], dy = p[1] - plan.rows[ri].a[1];
         var along = dx * g.ux + dy * g.uy, across = dx * g.nx + dy * g.ny;
@@ -529,7 +531,7 @@
         }
         save(); draw(); tramosPanel(); return;
       }
-      if (tool === 'rows') { if (hit && hit.kind === 'row') { plan.rows[hit.ri].flip = !plan.rows[hit.ri].flip; save(); draw(); } return; }
+      if (tool === 'rows') { if (hit && hit.kind === 'line') { selLine = hit.id; draw(); sidePanel(); return; } if (hit && hit.kind === 'row') { plan.rows[hit.ri].flip = !plan.rows[hit.ri].flip; save(); draw(); } return; }
       if (tool === 'board') { plan.board = snapFrom(null, p); save(); draw(); sidePanel(); return; }
       if (tool === 'charger') {
         var u = unplaced(); if (u.length) { plan.posts[u[0]] = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; save(); draw(); sidePanel(); }
