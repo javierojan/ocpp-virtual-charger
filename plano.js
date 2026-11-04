@@ -311,6 +311,7 @@
       plan.rows.forEach(function (r) { pts.push(r.a, r.b); });
       Object.keys(plan.posts).forEach(function (k) { pts.push(plan.posts[k]); });
       if (plan.board) pts.push(plan.board);
+      var en0 = entrance(); if (en0) pts.push([en0.c[0] - en0.n[0] * 6, en0.c[1] - en0.n[1] * 6]);   // the ramp and its label, outside
       // While the outline is open, a steady canvas of at least 60 × 40 m: the view must not jump between clicks
       if (!plan.outline.closed) { var o0 = [plan.outline.x0 || 0, plan.outline.y0 || 0]; pts.push([o0[0] - 4, o0[1] - 4], [o0[0] + 56, o0[1] + 36]); }
       var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
