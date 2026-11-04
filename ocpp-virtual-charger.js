@@ -385,7 +385,9 @@
       dropTxProfiles(c); ensureTimers();
       // StopTransaction first, Available last: some CSMSs close a session as abandoned if Available arrives first
       call('StopTransaction', { transactionId: tx, meterStop: Math.round(c.meterWh), timestamp: now(), reason: reason || 'Remote' })
-        .then(function () { return c.plugged ? status(c, 'Finishing') : null; })
+        // After a power cut the StopTransaction can only go out once power is back: the cable is still in and a new
+        // session can start, so Preparing (Finishing would leave the car waiting for good)
+        .then(function () { return c.plugged ? status(c, reason === 'PowerLoss' && !state.powerOff ? 'Preparing' : 'Finishing') : null; })
         .then(function () {
           if (c.inoperativeAfterSession) { c.inoperativeAfterSession = false; c.available = false; if (!c.plugged) return status(c, 'Unavailable'); }
           if (thenUnplug) setTimeout(function () { unplug(c.id); }, 1500); else if (!c.plugged) status(c, idleStatus(c));
