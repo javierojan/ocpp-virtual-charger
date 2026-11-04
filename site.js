@@ -4,7 +4,9 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var ES = /^es\b/i.test(navigator.language || '') || /[?&]lang=es\b/.test(location.search);
+  // A host page can fix the language with <html data-lang="es|en">; otherwise the browser's, or ?lang=es
+  var FORCED = document.documentElement.getAttribute('data-lang');
+  var ES = FORCED ? FORCED === 'es' : /^es\b/i.test(navigator.language || '') || /[?&]lang=es\b/.test(location.search);
   var HOSTED = location.hostname === 'askacharge.com';
   var SVGNS = 'http://www.w3.org/2000/svg';
 
