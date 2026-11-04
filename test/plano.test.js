@@ -81,3 +81,16 @@ test('local balancer: without cables it shares the site as before', () => {
   calc.allocate(hoses, 30, {});
   near(hoses[0].got, 15, 0.01); near(hoses[1].got, 15, 0.01);
 });
+
+test('phaseSplit: three-phase hoses load R, S and T alike; single-phase ones only their phase', () => {
+  const { phaseSplit } = require('../plano.js').calc;
+  const tri = phaseSplit(11, 11, 3, 3, 2);
+  assert.ok(Math.abs(tri[0] - 15.88) < 0.05 && tri[0] === tri[1] && tri[1] === tri[2]);
+  const mono = phaseSplit(7.4, 7.4, 1, 3, 2);
+  assert.deepStrictEqual(mono.map(x => Math.round(x * 10) / 10), [0, 32.2, 0]);
+  const carMono = phaseSplit(3.7, 11, 1, 3, 3);   // a single-phase car on a three-phase charger: only phase 3
+  assert.ok(carMono[0] === 0 && carMono[1] === 0 && carMono[2] > 16);
+  const supplyMono = phaseSplit(7.4, 7.4, 1, 1, 3); // single-phase supply: everything on the one phase
+  assert.ok(supplyMono[0] > 32 && supplyMono[1] === 0);
+  assert.deepStrictEqual(phaseSplit(0, 11, 3, 3, 1), [0, 0, 0]);
+});

@@ -55,6 +55,16 @@
     return ph === 1 ? 1000 / 230 : 1000 / (SQ3 * 400);
   }
 
+  // What one hose draws from each phase [R, S, T] in amps. Three-phase: the same on all three. Single-phase (a car or a
+  // charger that charges on one phase, or a single-phase supply): everything on its phase (1-3).
+  function phaseSplit(kw, chargerKw, carPhases, supplyPhases, phase) {
+    var out = [0, 0, 0]; if (!(kw > 0)) return out;
+    var apk = ampsPerKw(chargerKw, carPhases, supplyPhases);
+    if (supplyPhases !== 1 && apk < 1000 / 230 - 1e-9) { out[0] = out[1] = out[2] = kw * apk; return out; }
+    out[supplyPhases === 1 ? 0 : ((phase || 1) - 1) % 3] = kw * apk;
+    return out;
+  }
+
   // Nearest point of a polyline to p: distance along it (s) and straight from it (d)
   function project(route, p) {
     var best = { s: 0, d: Infinity }, acc = 0;
@@ -138,7 +148,7 @@
   }
 
   var calc = { outlinePoints: outlinePoints, closureGap: closureGap, outlineAdd: outlineAdd, ampsPerKw: ampsPerKw,
-               project: project, routeLength: routeLength, lineDrop: lineDrop, allocate: allocate, defaultPlan: defaultPlan,
+               project: project, routeLength: routeLength, phaseSplit: phaseSplit, lineDrop: lineDrop, allocate: allocate, defaultPlan: defaultPlan,
                DROP_LIMIT: DROP_LIMIT, GAMMA: GAMMA };
 
   // ── The view ────────────────────────────────────────────────────────────────────────────────────────
@@ -149,6 +159,7 @@
       tabPark: 'Parking', tabPlan: 'Plano',
       door: '🚪 Entrada', hDoor: 'Pincha en la pared por donde entran los coches (puerta de 4 m). Pincha en otra pared para moverla; con Borrar se quita.',
       entr: 'Entrada', inOut: 'Entrada y salida', tripShort: 'ha saltado',
+      phases: ['R', 'S', 'T'],
       pOff: 'Enciende la instalación (arriba) para que lleguen coches.', pFull: 'Todas las mangueras están ocupadas.',
       wOff: '⏻ Instalación apagada: pulsa «Encender la instalación» (arriba) para que lleguen coches.',
       wConn: '⚠ Ningún cargador del plano está conectado al servidor (mira la lista de la derecha): sin conexión no llegan coches.',
@@ -184,6 +195,7 @@
       tabPark: 'Car park', tabPlan: 'Plan',
       door: '🚪 Entrance', hDoor: 'Click the wall where cars come in (a 4 m door). Click another wall to move it; Delete removes it.',
       entr: 'Entrance', inOut: 'Way in and out', tripShort: 'tripped',
+      phases: ['P1', 'P2', 'P3'],
       pOff: 'Switch the site on (above) for cars to come.', pFull: 'Every hose is taken.',
       wOff: '⏻ The site is off: press "Switch the site on" (above) for cars to come.',
       wConn: '⚠ No charger on the plan is connected to the server (see the list on the right): no connection, no cars.',
@@ -340,6 +352,24 @@
       plan.lines.forEach(function (l) { out[l.id] = plan.board ? lineDrop(l, plan.board, plan.posts, a, cfg.phases) : null; });
       return out;
     }
+    // Live current of a line on each phase; the charger's phase (cfg.chargers[ci].phase, 1-3) takes its single-phase hoses,
+    // the second hose of a twin charger goes on the next phase (as an installer would wire it)
+    function phaseOf(ci, h) { var b = cfg.chargers[ci].phase || (ci % 3) + 1; return ((b - 1) + (h - 1)) % 3 + 1; }
+    function linePhases(l) {
+      if (!site.running()) return null;
+      var live = site.live(), out = [0, 0, 0];
+      l.chargers.forEach(function (ci) {
+        if (ci >= nChargers() || !live[ci] || !plan.posts[ci]) return;
+        live[ci].charger.state.connectors.forEach(function (k, i) {
+          var a = phaseSplit(k.powerKw || 0, cfg.chargers[ci].kw, k.car && k.car.phases, cfg.phases, phaseOf(ci, i + 1));
+          out[0] += a[0]; out[1] += a[1]; out[2] += a[2];
+        });
+      });
+      return out;
+    }
+    // The current that counts against the breaker: the busiest phase when we know them, otherwise the estimate
+    function lineAmps(l, r) { var ph = linePhases(l); return ph && cfg.phases === 3 ? Math.max(ph[0], ph[1], ph[2]) : r ? r.amps : 0; }
+    function phaseText(ph) { return T.phases.map(function (n, i) { return n + ' ' + fmt(ph[i], 1); }).join(' · ') + ' A'; }
     var stateColor = function (p) { return p > DROP_LIMIT ? 'var(--bad)' : p > 3 ? 'var(--wait)' : 'var(--av)'; };
 
     // ── Drawing ──
@@ -394,13 +424,15 @@
         var r = res[l.id], off = (li - (plan.lines.length - 1) / 2) * 0.45 * U, rt = runtime[l.id] || {};
         var col = rt.tripUntil > now ? 'var(--bad)' : r && r.taps.length ? stateColor(r.pct) : 'var(--off)';
         var route = [plan.board].concat(l.pts).map(function (p) { return r2(p[0] + off) + ',' + r2(p[1] + off); }).join(' ');
-        el('polyline', { points: route, class: 'cable' + (l.id === selLine ? ' sel' : '') + (rt.tripUntil > now ? ' cut' : ''), stroke: col }, svg);
+        var la = lineAmps(l, r), ph = linePhases(l);
+        el('polyline', { points: route, class: 'cable' + (l.id === selLine ? ' sel' : '') + (rt.tripUntil > now ? ' cut' : la > 0.05 && site.running() ? ' flow' : ''), stroke: col }, svg);
         if (r) r.taps.forEach(function (tp) {
           el('line', { x1: r2(tp.at[0] + off), y1: r2(tp.at[1] + off), x2: plan.posts[tp.ci][0], y2: plan.posts[tp.ci][1], class: 'cable drop', stroke: col }, svg);
         });
         var lab = l.pts.length ? l.pts[l.pts.length - 1] : plan.board;
         if (r && r.taps.length) el('text', { x: r2(lab[0] + off + 0.8 * U), y: r2(lab[1] + off - 0.8 * U), class: 'clab', 'font-size': r2(1.3 * U), fill: col }, svg)
-          .textContent = l.id + ' · ' + fmt(r.amps, 1) + ' / ' + l.amps + ' A · ' + fmt(r.pct, 1) + ' %';
+          .textContent = l.id + ' · ' + fmt(la, 1) + ' / ' + l.amps + ' A · ' + fmt(r.pct, 1) + ' %';
+        if (r && r.taps.length && ph && cfg.phases === 3) el('text', { x: r2(lab[0] + off + 0.8 * U), y: r2(lab[1] + off + 0.7 * U), class: 'clab soft', 'font-size': r2(1.1 * U) }, svg).textContent = phaseText(ph);
       });
       // Handles of the picked cable: its corners, and a small dot in the middle of each stretch to add one
       handles().forEach(function (h) {
@@ -684,15 +716,16 @@
         var names = l.chargers.filter(function (ci) { return ci < nChargers(); }).map(function (ci) { return esc(cfg.chargers[ci].name); }).join(', ') || T.noChargers;
         var state = rt.tripUntil > now ? '<div class="trip">' + t('tripped', { n: l.id, s: Math.ceil((rt.tripUntil - now) / 1000) }) + '</div>'
           : rt.overSince ? '<div class="trip">' + t('tripIn', { n: l.id, s: Math.max(0, Math.ceil((rt.overSince + cfg.trip * 1000 - now) / 1000)) }) + '</div>'
-          : r && r.amps > l.amps + 0.05 ? '<div class="trip">' + t(on ? 'over' : 'overFull', { a: l.amps }) + '</div>' : '';
+          : r && lineAmps(l, r) > l.amps + 0.05 ? '<div class="trip">' + t(on ? 'over' : 'overFull', { a: l.amps }) + '</div>' : '';
         var has = r && r.taps.length;
-        var load = r ? Math.min(100, r.amps / l.amps * 100) : 0;
+        var la2 = lineAmps(l, r), load = r ? Math.min(100, la2 / l.amps * 100) : 0;
         return '<div class="lnb' + (l.id === selLine ? ' sel' : '') + '" data-id="' + l.id + '">' +
           '<div class="lnh"><b>' + l.id + '</b><span class="pill" style="background:' + (has ? stateColor(r.pct) : 'var(--off)') + '">ΔU ' + (has ? fmt(r.pct, 2) : '–') + ' %</span></div>' +
           '<div class="f2"><div><label>' + T.breaker + '</label><select data-k="amps">' + BREAKERS.map(function (a) { return '<option' + (a === l.amps ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select></div>' +
           '<div><label>' + T.section + '</label><select data-k="mm2">' + SECTIONS.map(function (s) { return '<option value="' + s + '"' + (s === l.mm2 ? ' selected' : '') + '>' + fmt(s, s % 1 ? 1 : 0) + '</option>'; }).join('') + '</select></div></div>' +
-          (r ? '<div class="nums"><div><span>' + T.length + '</span>' + fmt(r.length, 1) + ' m</div><div><span>' + T.current + ' (' + (on ? T.live : T.full) + ')</span>' + fmt(r.amps, 1) + ' / ' + l.amps + ' A</div><div><span>' + T.drop + '</span>' + fmt(r.v, 1) + ' V</div></div>' +
-               '<div class="meter"><i style="width:' + load + '%;background:' + (r.amps > l.amps + 0.05 ? 'var(--bad)' : load > 85 ? 'var(--wait)' : 'var(--av)') + '"></i></div>' : '') +
+          (r ? '<div class="nums"><div><span>' + T.length + '</span>' + fmt(r.length, 1) + ' m</div><div><span>' + T.current + ' (' + (on ? T.live : T.full) + ')</span>' + fmt(la2, 1) + ' / ' + l.amps + ' A</div><div><span>' + T.drop + '</span>' + fmt(r.v, 1) + ' V</div></div>' +
+               (linePhases(l) && cfg.phases === 3 ? '<div class="nums">' + linePhases(l).map(function (x, i) { return '<div><span>' + T.phases[i] + '</span>' + fmt(x, 1) + ' A</div>'; }).join('') + '</div>' : '') +
+               '<div class="meter"><i style="width:' + load + '%;background:' + (la2 > l.amps + 0.05 ? 'var(--bad)' : load > 85 ? 'var(--wait)' : 'var(--av)') + '"></i></div>' : '') +
           '<div class="small">' + names + ' · ' + t('limit', { p: DROP_LIMIT }) + ' · <a href="#" data-del="' + l.id + '">' + T.del + '</a></div>' + state + '</div>';
       }).join('') + (cfg.sb ? '<div class="small">' + T.sbLines + '</div>' : '');
       Array.prototype.forEach.call(box.querySelectorAll('.lnb'), function (d) {
@@ -910,7 +943,7 @@
         var r = res[l.id], off = (li - (plan.lines.length - 1) / 2) * 0.35, rt = runtime[l.id] || {}, cut = rt.tripUntil > now;
         var route2 = [plan.board].concat(l.pts).map(function (q) { return [q[0] + off, q[1] + off]; });
         el('polyline', { points: pts2(route2), class: 'tray2' }, gBase);
-        var a = r ? r.amps : 0, col = cut ? 'var(--bad)' : a > l.amps + 0.05 ? 'var(--bad)' : a > 0.05 ? 'var(--chg)' : 'var(--off)';
+        var a = lineAmps(l, r), ph = linePhases(l), col = cut ? 'var(--bad)' : a > l.amps + 0.05 ? 'var(--bad)' : a > 0.05 ? 'var(--chg)' : 'var(--off)';
         var w = a > 0.05 ? Math.min(7, 2 + a / 12) : 1.5;
         el('polyline', { points: pts2(route2), class: 'cab2' + (a > 0.05 && !cut ? ' flow' : ''), stroke: col, 'stroke-width': r2(w) }, gBase);
         if (r) r.taps.forEach(function (tp) {
@@ -918,7 +951,8 @@
         });
         // The tag goes on the cable, on the longest stretches first, where it does not cover another cable's tag
         var tag = l.id + ' · ' + (cut ? T.tripShort : fmt(a, 1) + ' / ' + l.amps + ' A');
-        var tw = tag.length * 0.62 * U + 1.2 * U, th = 1.9 * U, cand = [];
+        var sub = ph && cfg.phases === 3 && !cut ? phaseText(ph) : '';
+        var tw = Math.max(tag.length * 0.62, sub.length * 0.5) * U + 1.2 * U, th = (sub ? 3.3 : 1.9) * U, cand = [];
         for (var i = 1; i < route2.length; i++) {
           var d = dist(route2[i - 1], route2[i]);
           [0.5, 0.3, 0.7, 0.15, 0.85].forEach(function (f, fi) { cand.push({ k: d * (1 - fi * 0.08), p: [route2[i - 1][0] + (route2[i][0] - route2[i - 1][0]) * f, route2[i - 1][1] + (route2[i][1] - route2[i - 1][1]) * f] }); });
@@ -927,8 +961,9 @@
         var clear = function (q) { return tags.every(function (o) { return Math.abs(o[0] - q[0]) > (o[2] + tw) / 2 + 0.2 || Math.abs(o[1] - q[1]) > th + 0.1; }); };
         var m = (cand.filter(function (c0) { return clear(c0.p); })[0] || cand[0] || { p: plan.board }).p;
         tags.push([m[0], m[1], tw]);
-        el('rect', { x: r2(m[0] - tw / 2), y: r2(m[1] - 0.95 * U), width: r2(tw), height: r2(1.9 * U), rx: r2(0.5 * U), class: 'atag', fill: col }, gTop);
+        el('rect', { x: r2(m[0] - tw / 2), y: r2(m[1] - 0.95 * U), width: r2(tw), height: r2(th), rx: r2(0.5 * U), class: 'atag', fill: col }, gTop);
         el('text', { x: r2(m[0]), y: r2(m[1] + 0.42 * U), 'text-anchor': 'middle', 'font-size': r2(1.15 * U), class: 'atagt' }, gTop).textContent = tag;
+        if (sub) el('text', { x: r2(m[0]), y: r2(m[1] + 1.75 * U), 'text-anchor': 'middle', 'font-size': r2(0.95 * U), class: 'atagt' }, gTop).textContent = sub;
       });
       // Main board where the LGA comes in, its breaker and the SB when there is one
       if (plan.board) {
@@ -1016,7 +1051,7 @@
         var res = calcAll(), live = site.live();
         plan.lines.forEach(function (l) {
           var rt = runtime[l.id] = runtime[l.id] || {}, r = res[l.id];
-          if (cut || rt.tripUntil > now || !r || !(cfg.trip > 0) || r.amps <= l.amps + 0.05) { rt.overSince = null; return; }
+          if (cut || rt.tripUntil > now || !r || !(cfg.trip > 0) || lineAmps(l, r) <= l.amps + 0.05) { rt.overSince = null; return; }
           rt.overSince = rt.overSince || now;
           if (now - rt.overSince >= cfg.trip * 1000) {
             rt.overSince = null; rt.tripUntil = now + 30000;

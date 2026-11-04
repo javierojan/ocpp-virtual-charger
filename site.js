@@ -27,7 +27,7 @@
     promoP: 'askacharge.com reparte la potencia de una instalación entre sus cargadores con OCPP estándar, con tus tarifas y tus cobros, y sin atarte a ningún fabricante. Pruébalo 30 días gratis, sin tarjeta.',
     simple: 'Un simulador, dicho claro: el OCPP es de verdad; la física está simplificada (curvas de carga de los coches, consumo del edificio). Solo se aceleran las baterías: el contador cuenta siempre la energía real.',
     single: 'Un solo cargador', madeby: 'Hecho por', video: '▶ Míralo en dos minutos: coches, balanceo de carga y el general saltando',
-    nameLbl: 'Nombre (identidad OCPP)', kwLbl: 'Potencia por manguera', hosesLbl: 'Mangueras', maxLbl: 'El cargador entero, como mucho (kW)',
+    nameLbl: 'Nombre (identidad OCPP)', kwLbl: 'Potencia por manguera', hosesLbl: 'Mangueras', maxLbl: 'El cargador entero, como mucho (kW)', phaseLbl: 'Fase si carga en monofásico',
     dlgNote: 'Si la instalación está encendida, solo se reconecta este cargador.', cancel: 'Cancelar', save: 'Guardar',
     charger: 'Cargador {n}', of: 'de {k} kW', over: 'Por encima de la LGA', ok: 'Dentro de la LGA',
     tripped: '⚡ Ha saltado el general: sin luz {s} s', tripIn: 'Salta el general en {s} s', building: 'edificio {k} kW',
@@ -317,6 +317,8 @@
     editing = ci; var c = cfg.chargers[ci];
     $('dlg-title').textContent = t('charger', { n: ci + 1 });
     $('d-name').value = c.name; $('d-kw').value = String(c.kw); $('d-hoses').value = String(c.hoses); $('d-max').value = c.max;
+    var PH = ES ? ['R', 'S', 'T'] : ['P1', 'P2', 'P3']; Array.prototype.forEach.call($('d-phase').options, function (o, i) { o.textContent = PH[i]; });
+    $('d-phase').value = String(c.phase || (ci % 3) + 1); $('d-phase').disabled = cfg.phases === 1;
     $('d-name').setCustomValidity('');
     showAddr(); $('dlg').showModal(); $('d-name').focus();
   }
@@ -335,6 +337,7 @@
     }
     var c = cfg.chargers[editing], before = JSON.stringify(c);
     c.name = name; c.kw = parseFloat($('d-kw').value); c.hoses = parseInt($('d-hoses').value, 10); c.max = parseFloat($('d-max').value) || c.kw * c.hoses;
+    c.phase = parseInt($('d-phase').value, 10) || 1;
     save();
     if (JSON.stringify(c) === before) return;
     var ci = editing;

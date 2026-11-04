@@ -81,6 +81,7 @@
     svg.plan .tray { fill: none; stroke: var(--off); opacity: .25; stroke-linecap: round; stroke-linejoin: round; }
     svg.plan .cable { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; cursor: pointer; }
     svg.plan .cable.sel { stroke-width: 6; } svg.plan .cable.drop { stroke-width: 2; } svg.plan .cable.cut { stroke-dasharray: 8 6; }
+    svg.plan .cable.flow { stroke-dasharray: 3 7; animation: flow .7s linear infinite; }
     svg.plan .cable.drawing { stroke: var(--in); stroke-dasharray: 6 5; }
     svg.plan .clab { fill: var(--ink); font-weight: 700; paint-order: stroke; stroke: var(--soft); stroke-linejoin: round; font-family: system-ui, sans-serif; }
     svg.plan .clab.soft { font-weight: 600; fill: var(--muted); }
@@ -110,7 +111,7 @@
     svg.park2 .plbl { fill: #fff; font-weight: 700; font-family: system-ui, sans-serif; paint-order: stroke; stroke: rgba(0,0,0,.6); stroke-linejoin: round; }
     svg.park2 .plbl.soft { font-weight: 600; opacity: .85; }
     svg.park2 .ped2, svg.park2 .cg2, svg.park2 .pcar2 { cursor: pointer; }
-    @media (prefers-reduced-motion: reduce) { svg.park2 .cab2.flow { animation: none; } svg.park2 .pcar2 { transition: none !important; } }
+    @media (prefers-reduced-motion: reduce) { svg.park2 .cab2.flow, svg.plan .cable.flow { animation: none; } svg.park2 .pcar2 { transition: none !important; } }
     .ttl { font-weight: 700; margin-bottom: 4px; }
     .tramos { margin: 0; padding-left: 22px; font-size: .84rem; } .tramos li { margin: 3px 0; }
     .tramos input { width: 84px; padding: 4px 6px; } .tramos select { width: auto; padding: 4px 6px; }
@@ -218,7 +219,8 @@
       <div><label data-t="kwLbl">Power per hose</label>
         <select id="d-kw"><option value="3.7">3.7 kW</option><option value="7.4">7.4 kW</option><option value="11">11 kW</option><option value="22">22 kW</option><option value="50">50 kW DC</option><option value="150">150 kW DC</option></select></div>
       <div><label data-t="hosesLbl">Hoses</label><select id="d-hoses"><option>1</option><option>2</option></select></div>
-      <div class="full"><label data-t="maxLbl">Whole charger at most (kW)</label><input id="d-max" type="number" min="1" step="0.1" /></div>
+      <div><label data-t="maxLbl">Whole charger at most (kW)</label><input id="d-max" type="number" min="1" step="0.1" /></div>
+      <div><label data-t="phaseLbl">Phase for single-phase charging</label><select id="d-phase"><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option></select></div>
     </div>
     <div class="small" data-t="dlgNote">Changing it while the site is on reconnects only this charger.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
@@ -251,7 +253,7 @@
 </dialog>
 
 <script src="ocpp-virtual-charger.js?v=4nov7"></script>
-<script src="plano.js?v=4nov12"></script>
-<script src="site.js?v=4nov12"></script>
+<script src="plano.js?v=4nov13"></script>
+<script src="site.js?v=4nov13"></script>
 </body>
 </html>
