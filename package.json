@@ -9,6 +9,7 @@
     "ui.js",
     "site.html",
     "site.js",
+    "plano.js",
     "examples/"
   ],
   "keywords": [

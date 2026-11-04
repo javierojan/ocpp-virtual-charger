@@ -72,7 +72,7 @@
   ];
 
   // ── Settings ────────────────────────────────────────────────────────────────────────────────────────
-  var DEFAULT = { url: '', grid: 43.6, phases: 3, amps: 63, arr: 40, speed: 1, base: 6, peaks: 1, trip: 0, sb: 0, sbMargin: 10, n: 4, chargers: [] };
+  var DEFAULT = { url: '', grid: 43.6, phases: 3, amps: 63, arr: 40, speed: 1, base: 6, peaks: 1, trip: 0, sb: 0, sbMargin: 10, n: 4, chargers: [], plan: null, view: 'park' };
   for (var i = 0; i < 6; i++) DEFAULT.chargers.push({ name: 'SITE-' + (i + 1), kw: i < 2 ? 11 : 22, hoses: 2, max: 22 });
   var cfg;
   try { cfg = JSON.parse(localStorage.getItem('ovc-parking') || 'null'); } catch (e) {}
@@ -208,6 +208,7 @@
     });
     cars.forEach(function (car) { gCars.appendChild(car.el); });
     paint();
+    if (site.onLayout) site.onLayout();
   }
 
   // ── Cars ───────────────────────────────────────────────────────────────────────────────────────────
@@ -371,32 +372,30 @@
     }
     side(total, chg, cut, now);
     paint(total, chg, cut);
+    if (site.onTick) site.onTick(now, cut);
   }, 1000);
 
   // The local balancer (SB): measures the LGA and caps every charger itself, outside OCPP. Like a good one, it gives each
   // charging hose at least its minimum (6 A per phase) in order of arrival while what the building leaves free (minus
   // the margin) allows it, and shares the rest equally; the hoses that don't fit wait. Never everyone below the minimum.
+  // With a plan, it also keeps every cable under its breaker (OvcPlano.calc.allocate, tested in test/plano.test.js).
   function localBalancer() {
-    var free = Math.max(0, cfg.grid * (1 - cfg.sbMargin / 100) - building), hoses = [];
+    var keep = 1 - cfg.sbMargin / 100, free = Math.max(0, cfg.grid * keep - building), hoses = [], caps = {};
+    var lineCaps = site.lineCaps ? site.lineCaps() : {};
+    Object.keys(lineCaps).forEach(function (k) { caps[k] = lineCaps[k] * keep; });
     live.forEach(function (p, ci) {
-      var kw = cfg.chargers[ci].kw, sup = kw > 22 ? 0 : (kw > 7.4 ? 3 : 1);
+      var kw = cfg.chargers[ci].kw, sup = kw > 22 ? 0 : (kw > 7.4 ? 3 : 1), line = site.lineFor ? site.lineFor(ci) : null;
       p.charger.state.connectors.forEach(function (c) {
         if (c.transactionId == null) return;
         var ph = sup && c.car && c.car.phases ? Math.min(sup, c.car.phases) : sup;
         var want = Math.min(kw, c.car ? (sup ? c.car.maxAcKw || kw : c.car.maxDcKw || kw) : kw);
         if (c.status === 'SuspendedEV') want = 0;
-        hoses.push({ ci: ci, since: c.txStartedAt || 0, min: ph ? 6 * 230 * ph / 1000 : 1, want: want, got: 0 });
+        hoses.push({ ci: ci, since: c.txStartedAt || 0, min: ph ? 6 * 230 * ph / 1000 : 1, want: want, got: 0, line: line,
+                     apk: window.OvcPlano.calc.ampsPerKw(kw, c.car && c.car.phases, cfg.phases) });
       });
     });
-    hoses.sort(function (a, b) { return a.since - b.since; });
-    var served = [];
-    hoses.forEach(function (h) { if (h.want > 0 && free >= h.min) { h.got = h.min; free -= h.min; served.push(h); } });
-    while (served.length && free > 0.01) {
-      var share = free / served.length, still = [];
-      served.forEach(function (h) { var g = Math.min(share, h.want - h.got); h.got += g; free -= g; if (h.want - h.got > 0.01) still.push(h); });
-      if (still.length === served.length) break;
-      served = still;
-    }
+    window.OvcPlano.calc.allocate(hoses, free, caps);
+    free = Math.max(0, cfg.grid * keep - building) - hoses.reduce(function (s, h) { return s + h.got; }, 0);
     live.forEach(function (p, ci) {
       var mine = hoses.filter(function (h) { return h.ci === ci; });
       var cap = mine.length ? mine.reduce(function (s, h) { return s + h.got; }, 0) : Math.min(cfg.chargers[ci].max, free);
@@ -506,6 +505,10 @@
   }
 
   $('logf').onchange = function () { $('log').textContent = ''; };
+  // What the plan view (plano.js) needs from the site
+  var site = { cfg: cfg, ES: ES, save: save, live: function () { return live; }, running: function () { return running; },
+               bays: function () { return bays; }, arrive: arrive, leave: leave, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
+  if (window.OvcPlano) window.OvcPlano.mount(site);
   lgaButton();
   layout();
 })();

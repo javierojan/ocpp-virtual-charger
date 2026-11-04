@@ -48,6 +48,15 @@ The LGA (single or three-phase, main fuse) is set in its own dialog, with the bu
 balancer (SB)** that caps the chargers itself outside OCPP, the way a site device does: minimum first in order of arrival,
 the rest shared. The CSMS's profiles still apply on top, so you can test a CSMS with and without a balancer underneath.
 
+**Plan view** (`plano.js`, the *Plan* tab): draw the garage to scale — click its corners and fix each stretch's length
+and turn; it tells you if the outline does not close instead of closing it for you — add rows of bays, place the main
+board and the chargers, and draw the **cables** from the main board along their route, each with its breaker and
+cross-section. Every cable shows its current and an approximate **voltage drop** (copper, γ = 48, cos φ = 1, each
+charger at its point on the cable; 5 % limit from the origin of the circuit to the charging point, as in Spain's
+ITC-BT-52), the local balancer keeps every cable under its breaker, and a cable overloaded for longer than the main
+breaker setting trips and its chargers lose power. Plans save and load as JSON (`"format": "ocpp-virtual-charger/plan"`).
+It is a simulator: for a real project, use a proper electrical design tool.
+
 From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
 a table every few seconds:
 
@@ -135,6 +144,9 @@ plataforma de gestión (CSMS), arrancas y paras cargas, simulas cortes de red y 
 Demo: https://askacharge.com/askacharge/virtual-charger/ · Instalación con varios cargadores, acometida y
 reparto de carga: https://askacharge.com/askacharge/virtual-charger/site.html · Si no tienes un CSMS a mano, el
 [servidor de pruebas de askacharge.com](https://askacharge.com/askacharge/probar-ocpp.html) te da una dirección gratis y sin cuenta.
+En la pestaña *Plano* dibujas el garaje con sus medidas, el cuadro, los cargadores y las líneas con su protección y
+sección; ves la corriente y la caída de tensión aproximada de cada línea (límite del 5 %, ITC-BT-52), el SB respeta cada
+línea y una línea sobrecargada salta.
 
 ## Tests
 

@@ -63,6 +63,43 @@
     .promo { margin-top: 16px; padding: 14px; border-radius: 12px; background: linear-gradient(135deg, #0f3460, #16a34a); color: #fff; }
     .promo h3 { margin: 0 0 4px; font-size: 1.02rem; } .promo p { margin: 0 0 10px; font-size: .88rem; opacity: .95; }
     .promo a { display:inline-block; background:#fff; color:#0f3460; font-weight:800; padding:8px 14px; border-radius:9px; text-decoration:none; }
+    /* Plan view */
+    .tabs { display:flex; gap:6px; margin-bottom:10px; }
+    .tabs button { color: var(--muted); } .tabs button.on { color: var(--ink); border-color: var(--ink); }
+    .ptools { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+    .ptools button { padding:6px 10px; font-size:.82rem; font-weight:600; background: var(--soft); }
+    .ptools button.on { background: var(--ink); color: var(--card); border-color: var(--ink); }
+    [hidden] { display: none !important; }
+    svg.plan { width:100%; height:auto; display:block; border-radius:12px; background: var(--soft); user-select:none; touch-action:none; }
+    svg.plan .wall { fill: color-mix(in srgb, var(--curb) 28%, var(--soft)); stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    svg.plan .wall.open { fill: none; }
+    svg.plan .gapline { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
+    svg.plan .start { fill: var(--ink); }
+    svg.plan .cota { fill: var(--muted); font-family: ui-monospace,monospace; font-weight: 600; }
+    svg.plan .pbay { fill: var(--card); stroke: var(--off); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    svg.plan .tray { fill: none; stroke: var(--off); opacity: .25; stroke-linecap: round; stroke-linejoin: round; }
+    svg.plan .cable { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; cursor: pointer; }
+    svg.plan .cable.sel { stroke-width: 6; } svg.plan .cable.drop { stroke-width: 2; } svg.plan .cable.cut { stroke-dasharray: 8 6; }
+    svg.plan .cable.drawing { stroke: var(--in); stroke-dasharray: 6 5; }
+    svg.plan .clab { fill: var(--ink); font-weight: 700; paint-order: stroke; stroke: var(--soft); stroke-linejoin: round; font-family: system-ui, sans-serif; }
+    svg.plan .clab.soft { font-weight: 600; fill: var(--muted); }
+    svg.plan .pnode { cursor: pointer; } svg.plan .post { stroke: var(--card); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    svg.plan .post.insel { stroke: var(--in); stroke-width: 3; }
+    svg.plan .boardbox { fill: #1e293b; } svg.plan .boardtxt { fill: #fff; font-weight: 800; font-family: system-ui, sans-serif; }
+    .ttl { font-weight: 700; margin-bottom: 4px; }
+    .tramos { margin: 0; padding-left: 22px; font-size: .84rem; } .tramos li { margin: 3px 0; }
+    .tramos input { width: 84px; padding: 4px 6px; } .tramos select { width: auto; padding: 4px 6px; }
+    .okc { color: var(--av); font-weight: 700; font-size: .85rem; margin-top: 4px; }
+    .row-b { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .row-b button { font-size: .8rem; padding: 6px 10px; }
+    .lnb { border-top: 1px solid var(--line); padding: 8px 0 6px; display:grid; gap:6px; cursor: pointer; }
+    .lnb.sel { background: var(--soft); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+    .lnh { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .pill { font-weight:700; font-size:.74rem; padding:1px 8px; border-radius:999px; color:#fff; white-space:nowrap; }
+    .f2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .nums { display:grid; grid-template-columns: repeat(3,1fr); gap:6px; font-size:.8rem; font-variant-numeric: tabular-nums; }
+    .nums span { display:block; color: var(--muted); font-size:.7rem; }
+    .meter { height:7px; background: var(--line); border-radius:4px; overflow:hidden; } .meter i { display:block; height:100%; }
+    .tramos-box { margin-top: 10px; display:grid; grid-template-columns: minmax(0,1fr); gap: 10px; }
     footer { color: var(--muted); font-size: .85rem; margin-top: 20px; } a { color: var(--acc); }
   </style>
 </head>
@@ -85,10 +122,23 @@
       <a href="#" id="b-test" data-t="useTest">Use the free askacharge.com test server</a> · <a id="watch" target="_blank" rel="noopener" hidden data-t="watch">see what it receives →</a></div>
   </div>
 
+  <div class="tabs" role="tablist"><button type="button" role="tab" id="tab-park">Car park</button><button type="button" role="tab" id="tab-plan">Plan</button></div>
   <div class="layout">
     <div class="card" style="padding:10px">
-      <svg id="park" class="park" aria-label="Car park"></svg>
-      <div class="small" style="margin-top:6px" data-t="parkHelp">Click a charger to name it and set its power · click an empty bay to send a car · click a car to make it leave.</div>
+      <div id="park-view">
+        <svg id="park" class="park" aria-label="Car park"></svg>
+        <div class="small" style="margin-top:6px" data-t="parkHelp">Click a charger to name it and set its power · click an empty bay to send a car · click a car to make it leave.</div>
+      </div>
+      <div id="plan-view" hidden>
+        <div class="ptools" id="plan-tools"></div>
+        <div class="small" id="plan-hint" style="margin-bottom:6px"></div>
+        <div class="row-b" id="line-actions" hidden style="margin:0 0 6px"><button type="button" id="b-finish" class="primary"></button><button type="button" id="b-cancel-line"></button></div>
+        <svg id="plan" class="plan" aria-label="Plan"></svg>
+        <div class="tramos-box"><div id="tramos"></div></div>
+        <div class="row-b"><button type="button" id="b-plan-save"></button><button type="button" id="b-plan-load"></button><button type="button" id="b-plan-reset"></button>
+          <input type="file" id="plan-file" accept="application/json,.json" hidden></div>
+        <p class="small" id="drop-note"></p>
+      </div>
     </div>
     <div class="card">
       <div class="small" data-t="draw">From the grid</div>
@@ -100,6 +150,7 @@
       <svg id="chart" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true"></svg>
       <div class="small"><span style="color:var(--chg)">■</span> <span data-t="lgChg">chargers</span> · <span style="color:var(--off)">■</span> <span data-t="lgTot">with the building</span> · <span style="color:var(--bad)">┄</span> <span data-t="lgLim">grid connection</span> · <span data-t="lgWin">10 min</span></div>
       <div class="list" id="list"></div>
+      <div id="lines-box" hidden style="margin-top:12px"><div class="ttl" id="lines-ttl"></div><div id="lines-list"></div></div>
       <details><summary data-t="more">More settings</summary>
         <div style="margin-top:8px"><label data-t="nChg">Chargers in the car park</label>
           <select id="c-n"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
@@ -170,6 +221,7 @@
 </dialog>
 
 <script src="ocpp-virtual-charger.js"></script>
+<script src="plano.js"></script>
 <script src="site.js"></script>
 </body>
 </html>
