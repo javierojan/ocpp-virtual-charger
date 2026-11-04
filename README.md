@@ -4,8 +4,11 @@ An **OCPP 1.6J charge point that runs in your browser or in Node.js**, with no i
 Point it at any central system (CSMS), start and stop sessions, and watch every frame go by.
 Or put **a whole charging site** behind one grid connection and see whether your CSMS shares the power well.
 
+**▶ Garage simulator (draw your garage): https://askacharge.com/askacharge/en/garage-charging-simulator/** · [en español](https://askacharge.com/askacharge/simulador-garaje/)
 **▶ One charger: https://askacharge.com/askacharge/virtual-charger/**
 **▶ A charging site: https://askacharge.com/askacharge/virtual-charger/site.html** · [video, 2 min](https://youtu.be/_y8upeAv78g)
+
+![Cars driving into a garage drawn to scale; every cable shows its live current on each phase](docs/garage.gif)
 
 It behaves like a real charger on the wire:
 
@@ -48,13 +51,25 @@ The LGA (single or three-phase, main fuse) is set in its own dialog, with the bu
 balancer (SB)** that caps the chargers itself outside OCPP, the way a site device does: minimum first in order of arrival,
 the rest shared. The CSMS's profiles still apply on top, so you can test a CSMS with and without a balancer underneath.
 
+![The plan: outline with its measurements, bays, entrance, main board, chargers and cables with their current and voltage drop](docs/plan.png)
+
 **Plan view** (`plano.js`, the *Plan* tab): draw the garage to scale — click its corners and fix each stretch's length
 and turn; it tells you if the outline does not close instead of closing it for you — add rows of bays, place the main
 board and the chargers, and draw the **cables** from the main board along their route, each with its breaker and
 cross-section; drag a cable's corners to reroute it, or the dot in the middle of a stretch to add a corner. Every cable shows its current and an approximate **voltage drop** (copper, γ = 48, cos φ = 1, each
 charger at its point on the cable; 5 % limit from the origin of the circuit to the charging point, as in Spain's
 ITC-BT-52), the local balancer keeps every cable under its breaker, and a cable overloaded for longer than the main
-breaker setting trips and its chargers lose power. Once the outline closes and there are bays and chargers, the *Car park* tab shows your garage live, each hose parking its cars in the nearest bay. Plans save and load as JSON (`"format": "ocpp-virtual-charger/plan"`).
+breaker setting trips and its chargers lose power. Add the **entrance** (a door in one wall) and cars drive in and out
+through it. Every cable shows its live current **on each phase** (P1/P2/P3): three-phase cars load all three alike,
+single-phase ones (or 3.7/7.4 kW chargers) only their charger's phase, which you set in the charger's dialog (on a twin
+charger the second hose goes on the next phase), so you see at once whether a garage ends up unbalanced; a cable trips
+on its busiest phase. As soon as the outline closes, the *Car park* tab draws your garage live — asphalt, painted bays,
+the main board with its breaker, the LGA and every cable carrying current — each hose parking its cars in the nearest
+bay; it says what is missing and why no car is coming (site off, chargers not connected). Plans save and load as JSON
+(`"format": "ocpp-virtual-charger/plan"`).
+
+![The car park drawn from the plan: cars charging, each cable tagged with its current per phase](docs/car-park.png)
+
 It is a simulator: for a real project, use a proper electrical design tool.
 
 From Node, with Basic Auth per charger (what a browser can't send), the same site runs from a scenario file and prints
@@ -144,9 +159,10 @@ plataforma de gestión (CSMS), arrancas y paras cargas, simulas cortes de red y 
 Demo: https://askacharge.com/askacharge/virtual-charger/ · Instalación con varios cargadores, acometida y
 reparto de carga: https://askacharge.com/askacharge/virtual-charger/site.html · Si no tienes un CSMS a mano, el
 [servidor de pruebas de askacharge.com](https://askacharge.com/askacharge/probar-ocpp.html) te da una dirección gratis y sin cuenta.
-En la pestaña *Plano* dibujas el garaje con sus medidas, el cuadro, los cargadores y las líneas con su protección y
-sección; ves la corriente y la caída de tensión aproximada de cada línea (límite del 5 %, ITC-BT-52), el SB respeta cada
-línea y una línea sobrecargada salta.
+**Simulador de recarga para garajes: https://askacharge.com/askacharge/simulador-garaje/** — en la pestaña *Plano*
+dibujas el garaje con sus medidas, las plazas, la entrada, el cuadro, los cargadores y las líneas con su protección y
+sección; ves la corriente de cada fase (R, S, T) y la caída de tensión aproximada de cada línea (límite del 5 %,
+ITC-BT-52), el SB respeta cada línea y una línea sobrecargada salta por su fase más cargada.
 
 ## Tests
 

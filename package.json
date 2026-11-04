@@ -1,7 +1,7 @@
 {
   "name": "ocpp-virtual-charger",
-  "version": "1.1.0",
-  "description": "An OCPP 1.6J charge point simulator for the browser or Node.js, no dependencies: several connectors, Smart Charging profiles, cars, and a whole charging site behind one grid connection.",
+  "version": "1.2.0",
+  "description": "An OCPP 1.6J charge point simulator for the browser or Node.js, no dependencies: several connectors, Smart Charging profiles, cars, and a whole charging site behind one grid connection, and a garage drawn to scale with cables, phases and voltage drop.",
   "main": "ocpp-virtual-charger.js",
   "files": [
     "ocpp-virtual-charger.js",
@@ -20,7 +20,9 @@
     "charge-point",
     "simulator",
     "csms",
-    "electric-vehicle"
+    "electric-vehicle",
+    "load-balancing",
+    "smart-charging"
   ],
   "author": "Javier Ojanguren <info@askacharge.com> (https://askacharge.com)",
   "license": "MIT",
