@@ -51,7 +51,7 @@ the rest shared. The CSMS's profiles still apply on top, so you can test a CSMS 
 **Plan view** (`plano.js`, the *Plan* tab): draw the garage to scale — click its corners and fix each stretch's length
 and turn; it tells you if the outline does not close instead of closing it for you — add rows of bays, place the main
 board and the chargers, and draw the **cables** from the main board along their route, each with its breaker and
-cross-section. Every cable shows its current and an approximate **voltage drop** (copper, γ = 48, cos φ = 1, each
+cross-section; drag a cable's corners to reroute it, or the dot in the middle of a stretch to add a corner. Every cable shows its current and an approximate **voltage drop** (copper, γ = 48, cos φ = 1, each
 charger at its point on the cable; 5 % limit from the origin of the circuit to the charging point, as in Spain's
 ITC-BT-52), the local balancer keeps every cable under its breaker, and a cable overloaded for longer than the main
 breaker setting trips and its chargers lose power. Plans save and load as JSON (`"format": "ocpp-virtual-charger/plan"`).

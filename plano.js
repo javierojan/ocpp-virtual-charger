@@ -147,7 +147,7 @@
     var T = ES ? {
       tabPark: 'Parking', tabPlan: 'Plano',
       move: 'Mover', outline: 'Contorno', rows: 'Plazas', board: 'Cuadro', charger: 'Cargador', line: 'Línea', erase: 'Borrar',
-      hMove: 'Arrastra el cuadro o un cargador. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
+      hMove: 'Arrastra el cuadro o un cargador. Pincha una línea y arrastra sus puntos; el punto pequeño del medio de cada tramo crea una esquina nueva. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
       hOutline: 'Pincha las esquinas del garaje; para cerrar, pincha en la primera. Las medidas se corrigen abajo, tramo a tramo.',
       hRows: 'Arrastra a lo largo de la pared para poner una fila de plazas de 2,5 × 5 m. Pincha una fila para darle la vuelta.',
       hBoard: 'Pincha donde está el cuadro general (de ahí salen las líneas).',
@@ -155,7 +155,7 @@
       hAllPlaced: 'Todos los cargadores están colocados: muévelos con Mover o quita uno con Borrar.',
       hLine: 'Pincha por donde va el cable (bandeja) y en los cargadores que cuelgan de él; termina con doble clic o Intro. Con una línea elegida a la derecha, pinchar un cargador lo mete o lo saca de ella.',
       hNoBoard: 'Primero pon el cuadro: de ahí salen las líneas.',
-      hErase: 'Pincha una fila de plazas, un cargador, una línea o el cuadro para quitarlo.',
+      hErase: 'Pincha una fila de plazas, un cargador, una línea o el cuadro para quitarlo; en la línea elegida, pincha una esquina para quitar solo esa esquina.',
       tramos: 'Contorno, tramo a tramo', len: 'm', turn: 'luego', right: '90° der.', left: '90° izq.', straight: 'recto',
       r45: '45° der.', l45: '45° izq.', r135: '135° der.', l135: '135° izq.',
       closes: '✓ El contorno cierra', gap: 'No cierra: faltan {d} m hasta el inicio ({dx} m en horizontal, {dy} m en vertical). Corrige una medida; no lo cerramos por nuestra cuenta.',
@@ -170,7 +170,7 @@
     } : {
       tabPark: 'Car park', tabPlan: 'Plan',
       move: 'Move', outline: 'Outline', rows: 'Bays', board: 'Main board', charger: 'Charger', line: 'Cable', erase: 'Delete',
-      hMove: 'Drag the main board or a charger. With the site on, click a charger to send a car (or make it leave).',
+      hMove: 'Drag the main board or a charger. Click a cable and drag its points; the small dot in the middle of each stretch makes a new corner. With the site on, click a charger to send a car (or make it leave).',
       hOutline: 'Click the corners of the garage; click the first one to close it. Fix the measurements below, stretch by stretch.',
       hRows: 'Drag along the wall to add a row of 2.5 × 5 m bays. Click a row to flip it.',
       hBoard: 'Click where the main board is (the cables start there).',
@@ -178,7 +178,7 @@
       hAllPlaced: 'Every charger is placed: drag them with Move or remove one with Delete.',
       hLine: 'Click along the cable route (tray) and on the chargers it feeds; finish with a double click or Enter. With a cable picked on the right, clicking a charger adds it to it or takes it off.',
       hNoBoard: 'Place the main board first: the cables start there.',
-      hErase: 'Click a row of bays, a charger, a cable or the main board to remove it.',
+      hErase: 'Click a row of bays, a charger, a cable or the main board to remove it; on the picked cable, click a corner to remove just that corner.',
       tramos: 'Outline, stretch by stretch', len: 'm', turn: 'then', right: '90° right', left: '90° left', straight: 'straight',
       r45: '45° right', l45: '45° left', r135: '135° right', l135: '135° left',
       closes: '✓ The outline closes', gap: 'It does not close: {d} m short of the start ({dx} m across, {dy} m down). Fix a measurement; we do not close it for you.',
@@ -345,6 +345,10 @@
         if (r && r.taps.length) el('text', { x: r2(lab[0] + off + 0.8 * U), y: r2(lab[1] + off - 0.8 * U), class: 'clab', 'font-size': r2(1.3 * U), fill: col }, svg)
           .textContent = l.id + ' · ' + fmt(r.pct, 1) + ' %';
       });
+      // Handles of the picked cable: its corners, and a small dot in the middle of each stretch to add one
+      handles().forEach(function (h) {
+        el('circle', { cx: r2(h.p[0]), cy: r2(h.p[1]), r: r2((h.kind === 'vertex' ? 0.55 : 0.35) * U), class: 'handle' + (h.kind === 'mid' ? ' mid' : '') }, svg);
+      });
       // The line being drawn
       if (drawing && drawing.kind === 'line') {
         var dp = [plan.board].concat(drawing.pts);
@@ -398,7 +402,20 @@
       var L = dist(r.a, r.b), ux = (r.b[0] - r.a[0]) / (L || 1), uy = (r.b[1] - r.a[1]) / (L || 1), sd = r.flip ? -1 : 1;
       return { ux: ux, uy: uy, nx: -uy * sd, ny: ux * sd, L: Math.floor(L / 2.5 + 1e-6) * 2.5 };
     }
+    function handles() {
+      if (!plan.board || drawing || (tool !== 'move' && tool !== 'line' && tool !== 'erase')) return [];
+      var l = plan.lines.filter(function (x) { return x.id === selLine; })[0]; if (!l) return [];
+      var route = [plan.board].concat(l.pts), out = [];
+      l.pts.forEach(function (q, i) { out.push({ kind: 'vertex', id: l.id, i: i, p: q }); });
+      if (tool !== 'erase') for (var i = 1; i < route.length; i++) {
+        out.push({ kind: 'mid', id: l.id, i: i - 1, p: [(route[i - 1][0] + route[i][0]) / 2, (route[i - 1][1] + route[i][1]) / 2] });
+      }
+      return out;
+    }
     function hitTest(p) {
+      var hs = handles();
+      for (var hi = 0; hi < hs.length; hi++) if (hs[hi].kind === 'vertex' && dist(hs[hi].p, p) < 1.1 * U) return hs[hi];
+      for (hi = 0; hi < hs.length; hi++) if (hs[hi].kind === 'mid' && dist(hs[hi].p, p) < 0.9 * U) return hs[hi];
       var tol = 1.6 * U, best = null, bd = Infinity;
       for (var ci = 0; ci < nChargers(); ci++) { var q = plan.posts[ci]; if (q && dist(q, p) < tol && dist(q, p) < bd) { bd = dist(q, p); best = { kind: 'charger', ci: ci }; } }
       if (plan.board && dist(plan.board, p) < tol && dist(plan.board, p) < bd) { bd = dist(plan.board, p); best = { kind: 'board' }; }
@@ -447,6 +464,18 @@
     svg.addEventListener('pointermove', function (ev) {
       var p = toM(ev);
       if (down && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 4) down.moved = true;
+      if (down && down.moved && (tool === 'move' || tool === 'line') && down.hit && (down.hit.kind === 'vertex' || down.hit.kind === 'mid')) {
+        var ln = plan.lines.filter(function (x) { return x.id === down.hit.id; })[0];
+        if (ln) {
+          if (down.hit.kind === 'mid') { ln.pts.splice(down.hit.i, 0, down.hit.p.slice()); down.hit = { kind: 'vertex', id: ln.id, i: down.hit.i }; }
+          var k = down.hit.i, prev = k === 0 ? plan.board : ln.pts[k - 1], next = ln.pts[k + 1];
+          var q2 = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
+          // Square to its neighbours when close: cables run along walls and trays
+          [prev, next].forEach(function (nb) { if (!nb) return; if (Math.abs(q2[0] - nb[0]) < 0.8 * U) q2[0] = nb[0]; if (Math.abs(q2[1] - nb[1]) < 0.8 * U) q2[1] = nb[1]; });
+          ln.pts[k] = q2; drag = true; draw();
+        }
+        return;
+      }
       if (down && down.moved && tool === 'move' && down.hit && (down.hit.kind === 'board' || down.hit.kind === 'charger')) {
         drag = true; var q = [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
         if (down.hit.kind === 'board') plan.board = q; else plan.posts[down.hit.ci] = q;
@@ -461,7 +490,7 @@
     svg.addEventListener('pointerup', function (ev) {
       if (!down) return;
       var d = down; down = null;
-      if (drag) { drag = null; save(); draw(); return; }
+      if (drag) { drag = null; save(); draw(); sidePanel(); return; }
       if (drawing && drawing.kind === 'row') {
         var rw = drawing; drawing = null;
         if (rw.b && dist(rw.a, rw.b) >= 2.5) { plan.rows.push({ a: rw.a, b: rw.b }); save(); }
@@ -473,6 +502,7 @@
       tap(d.p, d.hit, dbl);
     });
     function tap(p, hit, dbl) {
+      if (hit && (hit.kind === 'vertex' || hit.kind === 'mid') && tool !== 'erase') return;
       if (tool === 'move') {
         if (hit && hit.kind === 'charger') carFor(hit.ci);
         else if (hit && hit.kind === 'line') { selLine = hit.id; draw(); sidePanel(); }
@@ -501,6 +531,7 @@
         if (hit.kind === 'board') plan.board = null;
         else if (hit.kind === 'charger') { delete plan.posts[hit.ci]; plan.lines.forEach(function (l) { l.chargers = l.chargers.filter(function (x) { return x !== hit.ci; }); }); }
         else if (hit.kind === 'line') { removeLine(hit.id); return; }
+        else if (hit.kind === 'vertex') { var lv = plan.lines.filter(function (x) { return x.id === hit.id; })[0]; if (lv) lv.pts.splice(hit.i, 1); }
         else if (hit.kind === 'row') plan.rows.splice(hit.ri, 1);
         save(); draw(); sidePanel(); return;
       }
