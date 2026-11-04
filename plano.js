@@ -164,6 +164,10 @@
       length: 'Hasta el más lejano', current: 'Corriente', drop: 'Caída', del: 'Quitar', finish: 'Terminar línea', cancelLine: 'Cancelar',
       full: 'a plena carga', live: 'ahora', over: 'Sobrecarga: pasa de {a} A', overFull: 'A plena carga pasaría de {a} A', tripIn: 'Salta {n} en {s} s', tripped: '⚡ Ha saltado {n}: sin luz {s} s',
       noChargers: 'sin cargadores', limit: 'límite {p} %',
+      nOpen: 'Tu plano aún no se usa aquí: el contorno está abierto. Ciérralo en la pestaña Plano pinchando en la primera esquina.',
+      nGap: 'Tu plano aún no se usa aquí: el contorno no cierra (faltan {d} m). Corrige una medida en la pestaña Plano.',
+      nRows: 'Sin plazas dibujadas: los coches aparcan junto a su cargador (▥ Plazas en la pestaña Plano)',
+      nPosts: 'Sin colocar en el plano: {n} (⚡ Cargador en la pestaña Plano)',
       dropNote: 'Caída de tensión aproximada: cobre a γ = 48, cos φ = 1, cada cargador en su punto de la línea; las monofásicas, como si fueran todas a la misma fase. Límite del 5 % desde el origen del circuito hasta el punto de recarga (ITC-BT-52, España); comprueba la norma de tu país. Para un proyecto, el cálculo bueno lo hace un programa de cálculo eléctrico.',
       save: 'Guardar plano (.json)', load: 'Cargar plano', reset: 'Plano de ejemplo', newP: 'Nuevo parking', newQ: 'Se borra el plano actual (guárdalo antes si lo quieres).', newYes: 'Empezar de cero', newNo: 'Cancelar', bad: 'Ese fichero no es un plano del simulador.',
       unplaced: 'Sin colocar: {n}', sbLines: 'El SB respeta también la protección de cada línea.'
@@ -187,6 +191,10 @@
       length: 'To the farthest', current: 'Current', drop: 'Drop', del: 'Remove', finish: 'Finish cable', cancelLine: 'Cancel',
       full: 'at full load', live: 'now', over: 'Overload: above {a} A', overFull: 'At full load it would go above {a} A', tripIn: '{n} trips in {s} s', tripped: '⚡ {n} tripped: no power for {s} s',
       noChargers: 'no chargers', limit: '{p} % limit',
+      nOpen: 'Your plan is not used here yet: the outline is open. Close it in the Plan tab by clicking the first corner.',
+      nGap: 'Your plan is not used here yet: the outline does not close ({d} m short). Fix a measurement in the Plan tab.',
+      nRows: 'No bays drawn: cars park next to their charger (▥ Bays in the Plan tab)',
+      nPosts: 'Not placed on the plan: {n} (⚡ Charger in the Plan tab)',
       dropNote: 'Approximate voltage drop: copper at γ = 48, cos φ = 1, each charger at its point on the cable; single-phase hoses counted as if all on the same phase. 5 % limit from the origin of the circuit to the charging point (Spain, ITC-BT-52); check your local rules. For a real project, use a proper electrical design tool.',
       save: 'Save plan (.json)', load: 'Load plan', reset: 'Sample plan', newP: 'New car park', newQ: 'This clears the current plan (save it first if you want it).', newYes: 'Start from scratch', newNo: 'Cancel', bad: 'That file is not a plan from this simulator.',
       unplaced: 'Not placed: {n}', sbLines: 'The SB also respects each cable\'s breaker.'
@@ -687,22 +695,51 @@
         var post = plan.posts[ci]; if (!post) continue;
         var near = bays.filter(function (b) { return !taken[b.key] && dist(b.c, post) < 8; })
                        .sort(function (a, b) { return dist(a.c, post) - dist(b.c, post); });
-        for (var h = 1; h <= cfg.chargers[ci].hoses; h++) { var b = near.shift(); if (b) { taken[b.key] = true; out[ci + ':' + h] = b; } }
+        for (var h = 1; h <= cfg.chargers[ci].hoses; h++) {
+          var b = near.shift();
+          if (b) { taken[b.key] = true; out[ci + ':' + h] = b; continue; }
+          // No bay drawn near it: a bay of its own next to the charger, facing the middle of the garage
+          // Square to the nearest wall, facing inwards (towards the middle of the garage)
+          var op = outlinePoints(plan.outline), cx = 0, cy = 0; op.forEach(function (q) { cx += q[0] / op.length; cy += q[1] / op.length; });
+          var bestW = null, bdW = Infinity;
+          for (var wi = 1; wi < op.length; wi++) { var pw = project([op[wi - 1], op[wi]], post); if (pw.d < bdW) { bdW = pw.d; bestW = [op[wi - 1], op[wi]]; } }
+          var wl = bestW ? dist(bestW[0], bestW[1]) || 1 : 1, ux = bestW ? (bestW[1][0] - bestW[0][0]) / wl : 1, uy = bestW ? (bestW[1][1] - bestW[0][1]) / wl : 0;
+          var nx = -uy, ny = ux; if ((cx - post[0]) * nx + (cy - post[1]) * ny < 0) { nx = -nx; ny = -ny; }
+          var off = (h - (cfg.chargers[ci].hoses + 1) / 2) * 2.6;
+          var c0 = [post[0] + nx * 3 + ux * off, post[1] + ny * 3 + uy * off];
+          var q0 = [[c0[0] - ux * 1.25 - nx * 2.5, c0[1] - uy * 1.25 - ny * 2.5], [c0[0] + ux * 1.25 - nx * 2.5, c0[1] + uy * 1.25 - ny * 2.5],
+                    [c0[0] + ux * 1.25 + nx * 2.5, c0[1] + uy * 1.25 + ny * 2.5], [c0[0] - ux * 1.25 + nx * 2.5, c0[1] - uy * 1.25 + ny * 2.5]];
+          out[ci + ':' + h] = { key: 'v' + ci + ':' + h, c: c0, n: [nx, ny], q: q0, virtual: true };
+        }
       }
       return { bays: bays, hose: out };
     }
-    function planReady() { var g = closureGap(plan.outline); return !!(g && g.d < 0.05 && plan.rows.length && Object.keys(plan.posts).length); }
+    // Your plan is used as soon as its outline closes; whatever is missing is said, never silently swapped for the sample
+    function planReady() { var g = closureGap(plan.outline); return !!(g && g.d < 0.05); }
+    function parkNotice() {
+      if (!plan.outline.tramos.length) return '';
+      var g = closureGap(plan.outline);
+      if (!plan.outline.closed) return T.nOpen;
+      if (!g || g.d >= 0.05) return t('nGap', { d: fmt(g ? g.d : 0, 2) });
+      var miss = [];
+      if (!plan.rows.length) miss.push(T.nRows);
+      var u = unplaced(); if (u.length) miss.push(t('nPosts', { n: u.map(function (i) { return cfg.chargers[i].name; }).join(', ') }));
+      return miss.join(' · ');
+    }
     var STATUS = { Available: 'var(--av)', Charging: 'var(--chg)', Preparing: 'var(--wait)', Finishing: 'var(--wait)', SuspendedEV: 'var(--wait)',
                    SuspendedEVSE: 'var(--wait)', Faulted: 'var(--bad)', Unavailable: 'var(--off)', Reserved: 'var(--in)' };
     function drawPark() {
       var ready = planReady();
       // SVG elements have no .hidden property: the attribute has to be set by hand
       $('park').toggleAttribute('hidden', ready); parkSvg.toggleAttribute('hidden', !ready); $('park-help').hidden = ready; $('park-plan-help').hidden = !ready;
+      var nt = parkNotice(); $('park-notice').textContent = nt; $('park-notice').hidden = !nt;
+      $('park-notice').className = ready ? 'small' : 'trip';   // missing bits are a hint; an outline that does not close is the reason
       if (!ready || view !== 'park') return;
       var keep = svg; svg = parkSvg; fit(); svg = keep;
       parkSvg.innerHTML = '';
       var pts = outlinePoints(plan.outline), hb = hoseBays(), live = site.live(), cars = site.bays();
       el('polygon', { points: pts.map(function (p) { return p.join(','); }).join(' '), class: 'wall' }, parkSvg);
+      Object.keys(hb.hose).forEach(function (k) { var vb2 = hb.hose[k]; if (vb2.virtual) el('polygon', { points: vb2.q.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' '), class: 'pbay' }, parkSvg); });
       hb.bays.forEach(function (b) { el('polygon', { points: b.q.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' '), class: 'pbay' }, parkSvg); });
       if (plan.board) {
         el('rect', { x: r2(plan.board[0] - 1.1 * U), y: r2(plan.board[1] - 1.1 * U), width: r2(2.2 * U), height: r2(2.2 * U), rx: r2(0.3 * U), class: 'boardbox' }, parkSvg);
