@@ -288,7 +288,9 @@
       onFrame: function (dir, fr) { log(c.name, dir, fr); }
     }) };
   }
+  var startedAt = null, lastArrival = null;
   function start() {
+    startedAt = Date.now(); lastArrival = null;
     $('msg').textContent = '';
     if (!/^wss?:\/\/.+\/$/.test(cfg.url || '')) { $('msg').textContent = TXT.noUrl; $('c-url').focus(); return; }
     running = true;
@@ -406,13 +408,16 @@
   }
 
   function traffic(now) {
-    if (cfg.arr > 0 && Math.random() < 1 / cfg.arr) {
+    // The first car comes a few seconds after switching on (an empty car park for a minute looks broken); then at random
+    var first = !cars.length && startedAt && now - startedAt > 4000 && (!lastArrival || now - lastArrival > 4000);
+    if (cfg.arr > 0 && (first || Math.random() < 1 / cfg.arr)) {
       var free = [];
       live.forEach(function (p, ci) {
         if (p.charger.state.connected && !p.charger.state.powerOff) p.charger.state.connectors.forEach(function (c) {
-          if (!bays[ci + ':' + c.id] && c.available) free.push([ci, c.id]);
+          if (!bays[ci + ':' + c.id] && c.available && (!site.canPark || site.canPark(ci, c.id))) free.push([ci, c.id]);
         });
       });
+      if (free.length) lastArrival = now;
       if (free.length) { var f = free[Math.floor(Math.random() * free.length)]; arrive(f[0], f[1]); }
     }
     // Un coche aparcado y enchufado sin carga (tras un corte de luz, o si la tarjeta no pasó) vuelve a pasar su
@@ -508,7 +513,7 @@
   $('logf').onchange = function () { $('log').textContent = ''; };
   // What the plan view (plano.js) needs from the site
   var site = { cfg: cfg, ES: ES, save: save, live: function () { return live; }, running: function () { return running; },
-               bays: function () { return bays; }, arrive: arrive, leave: leave, openDialog: openDialog, openLga: openLga, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
+               bays: function () { return bays; }, arrive: arrive, leave: leave, openDialog: openDialog, openLga: openLga, canPark: null, onTick: null, onLayout: null, lineFor: null, lineCaps: null };
   if (window.OvcPlano) window.OvcPlano.mount(site);
   lgaButton();
   layout();

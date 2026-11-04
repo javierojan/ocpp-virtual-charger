@@ -149,6 +149,7 @@
       tabPark: 'Parking', tabPlan: 'Plano',
       door: '🚪 Entrada', hDoor: 'Pincha en la pared por donde entran los coches (puerta de 4 m). Pincha en otra pared para moverla; con Borrar se quita.',
       entr: 'Entrada', inOut: 'Entrada y salida', tripShort: 'ha saltado',
+      pOff: 'Enciende la instalación (arriba) para que lleguen coches.', pFull: 'Todas las mangueras están ocupadas.',
       nDoor: 'Sin entrada: los coches aparecen directamente en su plaza (🚪 Entrada en la pestaña Plano)',
       move: '✋ Mover', outline: '✏️ Contorno', rows: '▥ Plazas', board: '▣ Cuadro', charger: '⚡ Cargador', line: '〰 Línea', erase: '✕ Borrar',
       hMove: 'Arrastra el cuadro o un cargador. Pincha una línea y arrastra sus puntos; el punto pequeño del medio de cada tramo crea una esquina nueva. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
@@ -179,6 +180,7 @@
       tabPark: 'Car park', tabPlan: 'Plan',
       door: '🚪 Entrance', hDoor: 'Click the wall where cars come in (a 4 m door). Click another wall to move it; Delete removes it.',
       entr: 'Entrance', inOut: 'Way in and out', tripShort: 'tripped',
+      pOff: 'Switch the site on (above) for cars to come.', pFull: 'Every hose is taken.',
       nDoor: 'No entrance: cars appear straight in their bay (🚪 Entrance in the Plan tab)',
       move: '✋ Move', outline: '✏️ Outline', rows: '▥ Bays', board: '▣ Main board', charger: '⚡ Charger', line: '〰 Line (cable)', erase: '✕ Delete',
       hMove: 'Drag the main board or a charger. Click a cable and drag its points; the small dot in the middle of each stretch makes a new corner. With the site on, click a charger to send a car (or make it leave).',
@@ -791,7 +793,7 @@
     }
     var STATUS = { Available: 'var(--av)', Charging: 'var(--chg)', Preparing: 'var(--wait)', Finishing: 'var(--wait)', SuspendedEV: 'var(--wait)',
                    SuspendedEVSE: 'var(--wait)', Faulted: 'var(--bad)', Unavailable: 'var(--off)', Reserved: 'var(--in)' };
-    var lastCut = false, parkCars = {};
+    var lastCut = false, parkCars = {}, sayUntil = 0;
     function pts2(a) { return a.map(function (q) { return r2(q[0]) + ',' + r2(q[1]); }).join(' '); }
     // Car seen from above, 4.4 × 1.8 m, nose to -y (same drawing as the sample car park, scaled to metres)
     function carShape2(color) {
@@ -857,8 +859,10 @@
       var ready = planReady();
       // SVG elements have no .hidden property: the attribute has to be set by hand
       $('park').toggleAttribute('hidden', ready); parkSvg.toggleAttribute('hidden', !ready); $('park-help').hidden = ready; $('park-plan-help').hidden = !ready;
-      var nt = parkNotice(); $('park-notice').textContent = nt; $('park-notice').hidden = !nt;
-      $('park-notice').className = ready ? 'small' : 'trip';   // missing bits are a hint; an outline that does not close is the reason
+      if (!(Date.now() < sayUntil)) {
+        var nt = parkNotice(); $('park-notice').textContent = nt; $('park-notice').hidden = !nt;
+        $('park-notice').className = ready ? 'small' : 'trip';
+      }   // missing bits are a hint; an outline that does not close is the reason
       if (!ready || view !== 'park') return;
       var keep = svg; svg = parkSvg; fit(); svg = keep;
       parkSvg.setAttribute('class', 'plan park2');
@@ -972,11 +976,18 @@
       if (plan.board && site.openLga && dist(plan.board, q) < 1.6 * U) { site.openLga(); return; }
       // Only the bay under the click (they are 2.5 m wide: one click must not reach the next one)
       var k = Object.keys(hb.hose).sort(function (x, y) { return dist(hb.hose[x].c, q) - dist(hb.hose[y].c, q); })[0];
-      if (!k || dist(hb.hose[k].c, q) > 2.4) return;
-      var car = cars[k], ci2 = +k.split(':')[0], h2 = +k.split(':')[1];
-      if (car) site.leave(car); else if (site.running()) site.arrive(ci2, h2);
+      // A car there: it leaves
+      if (k && dist(hb.hose[k].c, q) <= 2.4 && cars[k]) { site.leave(cars[k]); return; }
+      if (!site.running()) { parkSay(T.pOff); return; }
+      // Anywhere else in the garage: a car for the nearest free hose (it parks in that hose's bay)
+      var free = Object.keys(hb.hose).filter(function (x) { return !cars[x]; }).sort(function (x, y) { return dist(hb.hose[x].c, q) - dist(hb.hose[y].c, q); });
+      if (!free.length) { parkSay(T.pFull); return; }
+      site.arrive(+free[0].split(':')[0], +free[0].split(':')[1]);
     }
+    function parkSay(m) { var n = $('park-notice'); n.textContent = m; n.hidden = false; n.className = 'trip'; sayUntil = Date.now() + 4000; }
     parkSvg.addEventListener('click', parkHit);
+    // Cars only go to chargers that are on the plan (otherwise they would park out of sight)
+    site.canPark = function (ci, h) { return !planReady() || !!hoseBays().hose[ci + ':' + h]; };
 
     // ── For site.js: the cables' limits for the SB, and every second, the breakers of the cables ──
     site.lineFor = function (ci) { var l = plan.board ? lineOf(ci) : null; return l ? l.id : null; };
