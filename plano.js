@@ -165,7 +165,7 @@
       full: 'a plena carga', live: 'ahora', over: 'Sobrecarga: pasa de {a} A', overFull: 'A plena carga pasaría de {a} A', tripIn: 'Salta {n} en {s} s', tripped: '⚡ Ha saltado {n}: sin luz {s} s',
       noChargers: 'sin cargadores', limit: 'límite {p} %',
       dropNote: 'Caída de tensión aproximada: cobre a γ = 48, cos φ = 1, cada cargador en su punto de la línea; las monofásicas, como si fueran todas a la misma fase. Límite del 5 % desde el origen del circuito hasta el punto de recarga (ITC-BT-52, España); comprueba la norma de tu país. Para un proyecto, el cálculo bueno lo hace un programa de cálculo eléctrico.',
-      save: 'Guardar plano (.json)', load: 'Cargar plano', reset: 'Plano de ejemplo', bad: 'Ese fichero no es un plano del simulador.',
+      save: 'Guardar plano (.json)', load: 'Cargar plano', reset: 'Plano de ejemplo', newP: 'Nuevo parking', newQ: 'Se borra el plano actual (guárdalo antes si lo quieres).', newYes: 'Empezar de cero', newNo: 'Cancelar', bad: 'Ese fichero no es un plano del simulador.',
       unplaced: 'Sin colocar: {n}', sbLines: 'El SB respeta también la protección de cada línea.'
     } : {
       tabPark: 'Car park', tabPlan: 'Plan',
@@ -188,7 +188,7 @@
       full: 'at full load', live: 'now', over: 'Overload: above {a} A', overFull: 'At full load it would go above {a} A', tripIn: '{n} trips in {s} s', tripped: '⚡ {n} tripped: no power for {s} s',
       noChargers: 'no chargers', limit: '{p} % limit',
       dropNote: 'Approximate voltage drop: copper at γ = 48, cos φ = 1, each charger at its point on the cable; single-phase hoses counted as if all on the same phase. 5 % limit from the origin of the circuit to the charging point (Spain, ITC-BT-52); check your local rules. For a real project, use a proper electrical design tool.',
-      save: 'Save plan (.json)', load: 'Load plan', reset: 'Sample plan', bad: 'That file is not a plan from this simulator.',
+      save: 'Save plan (.json)', load: 'Load plan', reset: 'Sample plan', newP: 'New car park', newQ: 'This clears the current plan (save it first if you want it).', newYes: 'Start from scratch', newNo: 'Cancel', bad: 'That file is not a plan from this simulator.',
       unplaced: 'Not placed: {n}', sbLines: 'The SB also respects each cable\'s breaker.'
     };
     function t(k, v) { var s = T[k] || k; Object.keys(v || {}).forEach(function (x) { s = s.split('{' + x + '}').join(v[x]); }); return s; }
@@ -251,7 +251,8 @@
       plan.rows.forEach(function (r) { pts.push(r.a, r.b); });
       Object.keys(plan.posts).forEach(function (k) { pts.push(plan.posts[k]); });
       if (plan.board) pts.push(plan.board);
-      if (pts.length < 2) pts = [[0, 0], [40, 25]];
+      // While the outline is open, a steady canvas of at least 60 × 40 m: the view must not jump between clicks
+      if (!plan.outline.closed) { var o0 = [plan.outline.x0 || 0, plan.outline.y0 || 0]; pts.push([o0[0] - 4, o0[1] - 4], [o0[0] + 56, o0[1] + 36]); }
       var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
       var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
       var w = Math.max(20, x1 - x0), h = Math.max(12, y1 - y0), pad = Math.max(w, h) * 0.12 + 2;
@@ -650,6 +651,17 @@
         selLine = plan.lines.length ? plan.lines[0].id : null; save(); draw(); tramosPanel(); sidePanel();
       }).catch(function () { $('plan-hint').textContent = T.bad; });
       $('plan-file').value = '';
+    };
+    // New car park: empty plan, straight to drawing the outline (asked inline: browsers silence confirm())
+    $('b-plan-new').textContent = T.newP; $('new-q').textContent = T.newQ; $('b-new-yes').textContent = T.newYes; $('b-new-no').textContent = T.newNo;
+    $('b-plan-new').onclick = function () { $('new-confirm').hidden = false; $('b-plan-new').hidden = true; };
+    $('b-new-no').onclick = function () { $('new-confirm').hidden = true; $('b-plan-new').hidden = false; };
+    $('b-new-yes').onclick = function () {
+      plan = cfg.plan = { outline: { x0: 0, y0: 0, h0: 0, tramos: [], closed: false }, rows: [], board: null, posts: {}, lines: [] };
+      selLine = null; drawing = null; runtime = {}; save();
+      $('new-confirm').hidden = true; $('b-plan-new').hidden = false;
+      setTool('outline'); tramosPanel(); sidePanel();
+      $('plan').scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
     $('b-plan-reset').onclick = function () { plan = cfg.plan = defaultPlan(); selLine = 'L1'; save(); draw(); tramosPanel(); sidePanel(); };
     $('drop-note').textContent = T.dropNote;
