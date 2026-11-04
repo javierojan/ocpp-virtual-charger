@@ -52,7 +52,7 @@
   function t(k, v) { var s = TXT[k] || k; Object.keys(v || {}).forEach(function (x) { s = s.replace('{' + x + '}', v[x]); }); return s; }
   if (ES) {
     document.documentElement.lang = 'es';
-    document.title = 'Simulador de instalación de carga OCPP — un parking visto desde arriba';
+    if (!FORCED) document.title = 'Simulador de instalación de carga OCPP — un parking visto desde arriba';   // a host page keeps its own title
     Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (e) { if (TXT[e.dataset.t]) e.textContent = TXT[e.dataset.t]; });
     $('video').href = 'https://youtu.be/YfNWk6Fw51U';
   }
