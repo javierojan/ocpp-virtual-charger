@@ -150,6 +150,10 @@
       door: '🚪 Entrada', hDoor: 'Pincha en la pared por donde entran los coches (puerta de 4 m). Pincha en otra pared para moverla; con Borrar se quita.',
       entr: 'Entrada', inOut: 'Entrada y salida', tripShort: 'ha saltado',
       pOff: 'Enciende la instalación (arriba) para que lleguen coches.', pFull: 'Todas las mangueras están ocupadas.',
+      wOff: '⏻ Instalación apagada: pulsa «Encender la instalación» (arriba) para que lleguen coches.',
+      wConn: '⚠ Ningún cargador del plano está conectado al servidor (mira la lista de la derecha): sin conexión no llegan coches.',
+      wConnProd: '⚠ Ningún cargador del plano está conectado: sin conexión no llegan coches. El navegador no puede mandar la clave de cada cargador; para probar aquí, pulsa «Usar el servidor de pruebas gratuito de askacharge.com» (arriba).',
+      wManual: 'Llegadas: «solo cuando los mando». Pincha en el garaje para mandar un coche, o cámbialo arriba.',
       nDoor: 'Sin entrada: los coches aparecen directamente en su plaza (🚪 Entrada en la pestaña Plano)',
       move: '✋ Mover', outline: '✏️ Contorno', rows: '▥ Plazas', board: '▣ Cuadro', charger: '⚡ Cargador', line: '〰 Línea', erase: '✕ Borrar',
       hMove: 'Arrastra el cuadro o un cargador. Pincha una línea y arrastra sus puntos; el punto pequeño del medio de cada tramo crea una esquina nueva. Con la instalación encendida, pincha un cargador para mandar un coche (o que se vaya).',
@@ -181,6 +185,10 @@
       door: '🚪 Entrance', hDoor: 'Click the wall where cars come in (a 4 m door). Click another wall to move it; Delete removes it.',
       entr: 'Entrance', inOut: 'Way in and out', tripShort: 'tripped',
       pOff: 'Switch the site on (above) for cars to come.', pFull: 'Every hose is taken.',
+      wOff: '⏻ The site is off: press "Switch the site on" (above) for cars to come.',
+      wConn: '⚠ No charger on the plan is connected to the server (see the list on the right): no connection, no cars.',
+      wConnProd: '⚠ No charger on the plan is connected: no connection, no cars. A browser cannot send each charger\'s password; to try it here, click "Use the free askacharge.com test server" (above).',
+      wManual: 'Arrivals: "only when I send them". Click in the garage to send a car, or change it above.',
       nDoor: 'No entrance: cars appear straight in their bay (🚪 Entrance in the Plan tab)',
       move: '✋ Move', outline: '✏️ Outline', rows: '▥ Bays', board: '▣ Main board', charger: '⚡ Charger', line: '〰 Line (cable)', erase: '✕ Delete',
       hMove: 'Drag the main board or a charger. Click a cable and drag its points; the small dot in the middle of each stretch makes a new corner. With the site on, click a charger to send a car (or make it leave).',
@@ -780,12 +788,22 @@
     }
     // Your plan is used as soon as its outline closes; whatever is missing is said, never silently swapped for the sample
     function planReady() { var g = closureGap(plan.outline); return !!(g && g.d < 0.05); }
+    // Why no car is coming, said in the car park itself: the reason is usually not on screen
+    function whyNoCars() {
+      var placed = []; for (var i = 0; i < nChargers(); i++) if (plan.posts[i]) placed.push(i);
+      if (!placed.length) return '';
+      if (!site.running()) return T.wOff;
+      var live = site.live(), on = placed.filter(function (ci) { var st = live[ci] && live[ci].charger.state; return st && st.connected && !st.powerOff; });
+      if (!on.length) return /ocpp-test/.test(cfg.url || '') ? T.wConn : T.wConnProd;
+      if (!(cfg.arr > 0)) return T.wManual;
+      return '';
+    }
     function parkNotice() {
       if (!plan.outline.tramos.length) return '';
       var g = closureGap(plan.outline);
       if (!plan.outline.closed) return T.nOpen;
       if (!g || g.d >= 0.05) return t('nGap', { d: fmt(g ? g.d : 0, 2) });
-      var miss = [];
+      var miss = [], why = whyNoCars(); if (why) miss.push(why);
       if (!plan.rows.length) miss.push(T.nRows);
       if (!entrance()) miss.push(T.nDoor);
       var u = unplaced(); if (u.length) miss.push(t('nPosts', { n: u.map(function (i) { return cfg.chargers[i].name; }).join(', ') }));
@@ -861,7 +879,7 @@
       $('park').toggleAttribute('hidden', ready); parkSvg.toggleAttribute('hidden', !ready); $('park-help').hidden = ready; $('park-plan-help').hidden = !ready;
       if (!(Date.now() < sayUntil)) {
         var nt = parkNotice(); $('park-notice').textContent = nt; $('park-notice').hidden = !nt;
-        $('park-notice').className = ready ? 'small' : 'trip';
+        $('park-notice').className = ready && !whyNoCars() ? 'small' : 'trip';
       }   // missing bits are a hint; an outline that does not close is the reason
       if (!ready || view !== 'park') return;
       var keep = svg; svg = parkSvg; fit(); svg = keep;
