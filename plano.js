@@ -422,16 +422,24 @@
       return out;
     }
     function hitTest(p) {
-      var hs = handles();
-      for (var hi = 0; hi < hs.length; hi++) if (hs[hi].kind === 'vertex' && dist(hs[hi].p, p) < 1.1 * U) return hs[hi];
+      var hs = handles(), vtx = null;
+      for (var hi = 0; hi < hs.length; hi++) if (hs[hi].kind === 'vertex' && dist(hs[hi].p, p) < 1.1 * U) { vtx = hs[hi]; break; }
+      // Inside a charger's or the board's box it is always that box (a cable's corner sitting on it can still be dragged in the Line tool)
+      var m = 0.3 * U;
+      for (var ci = 0; ci < nChargers(); ci++) {
+        var q = plan.posts[ci];
+        if (q && Math.abs(p[0] - q[0]) <= 1.2 * U + m && Math.abs(p[1] - q[1]) <= 0.8 * U + m) return { kind: 'charger', ci: ci, vertex: vtx };
+      }
+      if (plan.board && Math.abs(p[0] - plan.board[0]) <= 1.1 * U + m && Math.abs(p[1] - plan.board[1]) <= 1.1 * U + m) return { kind: 'board', vertex: vtx };
+      if (vtx) return vtx;
       for (hi = 0; hi < hs.length; hi++) if (hs[hi].kind === 'mid' && dist(hs[hi].p, p) < 0.9 * U) return hs[hi];
+      // Near a box but outside it: the closest of chargers, board and cables
       var tol = 1.6 * U, best = null, bd = Infinity;
-      for (var ci = 0; ci < nChargers(); ci++) { var q = plan.posts[ci]; if (q && dist(q, p) < tol && dist(q, p) < bd) { bd = dist(q, p); best = { kind: 'charger', ci: ci }; } }
+      for (ci = 0; ci < nChargers(); ci++) { q = plan.posts[ci]; if (q && dist(q, p) < tol && dist(q, p) < bd) { bd = dist(q, p); best = { kind: 'charger', ci: ci }; } }
       if (plan.board && dist(plan.board, p) < tol && dist(plan.board, p) < bd) { bd = dist(plan.board, p); best = { kind: 'board' }; }
-      // A cable wins over a charger or the board when the click is closer to it, unless the click is on the box itself
       if (plan.board) for (var i = plan.lines.length - 1; i >= 0; i--) {
         var pr = project([plan.board].concat(plan.lines[i].pts), p);
-        if (pr.d < 0.9 * U && pr.d < bd && !(best && bd < 0.8 * U)) { bd = pr.d; best = { kind: 'line', id: plan.lines[i].id }; }
+        if (pr.d < 0.9 * U && pr.d < bd) { bd = pr.d; best = { kind: 'line', id: plan.lines[i].id }; }
       }
       if (best) return best;
       for (var ri = plan.rows.length - 1; ri >= 0; ri--) {
@@ -475,6 +483,7 @@
     svg.addEventListener('pointermove', function (ev) {
       var p = toM(ev);
       if (down && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 4) down.moved = true;
+      if (down && down.moved && tool === 'line' && down.hit && down.hit.vertex) down.hit = down.hit.vertex;
       if (down && down.moved && (tool === 'move' || tool === 'line') && down.hit && (down.hit.kind === 'vertex' || down.hit.kind === 'mid')) {
         var ln = plan.lines.filter(function (x) { return x.id === down.hit.id; })[0];
         if (ln) {
